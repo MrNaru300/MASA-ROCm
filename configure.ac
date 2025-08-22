@@ -1,47 +1,146 @@
-AC_PREREQ([2.63])
-AC_INIT([MASA-Serial], [1.0.1.1024], [edans.sandes@gmail.com], [masa-serial], [https://github.com/edanssandes/masa-serial])
+#                                               -*- Autoconf -*-
+# Process this file with autoconf to produce a configure script.
+#
+AC_PREREQ([2.71])
+AC_INIT([MASA-HIPAlign],[1.0.0],[bruno.santi.oli@gmail.com],[masa-hipalign],[https://github.com/MrNaru300/MASA-ROCm])
 AC_CONFIG_AUX_DIR(admin)
-AM_INIT_AUTOMAKE([-Wall -Werror])
+AM_INIT_AUTOMAKE
 AC_CONFIG_HEADERS([src/config.h])
 AC_CONFIG_FILES([Makefile])
 
 AC_CONFIG_SUBDIRS([libs/masa-core])
 
-AC_PROG_CXX
+AC_PROG_RANLIB
 
 LIBMASA_PATH="libs/masa-core"
 
-AC_CHECK_FILES(
-	[$LIBMASA_PATH $LIBMASA_PATH/src],
-	,
-	AC_MSG_ERROR([
-		MASA-Core source directory was not found: $LIBMASA_PATH/src.
-	])
-)
+#
+# Checks for programs.
+#
+AC_PROG_CXX
+AC_PROG_CC
+AC_PROG_CPP
+AC_PROG_MAKE_SET
 
+# Checks for header files.
+AC_CHECK_HEADERS([arpa/inet.h stdlib.h string.h sys/socket.h sys/time.h unistd.h getopt.h errno.h wordexp.h],,
+	AC_MSG_ERROR([Missing required header files.]))
+	
+# Checks for typedefs, structures, and compiler characteristics.
+AC_HEADER_STDBOOL
+AC_C_INLINE
+AC_TYPE_SIZE_T
+
+# Checks for library functions.
+AC_FUNC_FORK
+AC_FUNC_MALLOC
+AC_CHECK_FUNCS([gettimeofday inet_ntoa memset mkdir pow socket strcasecmp])
+
+# HIP Options
 
 OPTIMIZATION="-O3"
 
 AC_ARG_ENABLE([debug],
-	AC_HELP_STRING([--enable-debug],[enable GDB debug]),
+	AS_HELP_STRING([--enable-debug],[enable cpu debug]),
 	[DEBUG="-ggdb"; OPTIMIZATION=""]
+)
+
+AC_ARG_ENABLE([hip-debug],
+	AS_HELP_STRING([--enable-hip-debug],[enable HIP debug]),
+	[HIP_DEBUG="--debug"; OPTIMIZATION=""]
+)
+
+AC_ARG_WITH([hip-arch],
+	AS_HELP_STRING([--with-hip-arch=ARCH],[select one HIP architecture, e.g. gfx900]),
+	[HIP_ARCH="$withval"],
+	[HIP_ARCH="gfx900"]
+)
+HIP_ARCH_FLAGS="--amdgpu-target=$HIP_ARCH"
+AC_DEFINE_UNQUOTED([COMPILED_HIP_ARCH], ["$HIP_ARCH"], [architecture used in --amdgpu-target hipcc parameter])
+
+AC_ARG_WITH([threads],
+	AS_HELP_STRING([--with-threads=COUNT],[choose the number of HIP threads [default=128] (use power of 2)]),
+	[HIPALIGN_THREADS="-DTHREADS_COUNT=$withval"],
+	[HIPALIGN_THREADS="-DTHREADS_COUNT=128"]
+)
+
+AC_ARG_WITH([maxregcount],
+	AS_HELP_STRING([--with-maxregcount=COUNT],[choose the maximum number of registers per threads [default=no]]),
+	[HIP_REGISTERS="--maxrregcount $withval"],
+	[HIP_REGISTERS=""]
 )
 
 #default: 64bit
 AC_ARG_ENABLE([32bit],
-	AC_HELP_STRING([--enable-32bit],[force compilation in 32 bit mode.]),
-	[ARCH="386"; PLATFORM="-m32";
+	AS_HELP_STRING([--enable-32bit],[force compilation in 32 bit mode.]),
+	[ARCH="386"; HIP_LIB_DIR="lib"; PLATFORM="-m32";
 		AC_MSG_NOTICE([Enabling 32bit compilation])
 	],
-	[ARCH="x86_64"; PLATFORM="-m64";
+	[ARCH="x86_64"; HIP_LIB_DIR="lib"; PLATFORM="-m64";
 		AC_MSG_NOTICE([Enabling 64bit compilation])	
 	]
 )
 
+# Setup HIP paths
+# ------------------------------------------------------------------------------
+AC_ARG_WITH([hip],
+   [AS_HELP_STRING([--with-hip=PATH],[path where HIP is installed (default=/opt/rocm)])],
+   [HIP_HOME=$withval],
+   [HIP_HOME=/opt/rocm])
 
-CXXFLAGS="-DUNIX $COMMONFLAGS $PLATFORM $OPTIMIZATION $DEBUG -I$LIBMASA_PATH/src"
+AM_CONDITIONAL([COMPILE_HIP], [test "x$HIP_HOME" != "xno"])
+
+AS_IF([test "x$HIP_HOME" != "xno"], [
+
+	HIP_CFLAGS="-I$HIP_HOME/include"
+	HIP_LIBS="-L$HIP_HOME/$HIP_LIB_DIR"
+	HIP_LDFLAGS="-L$HIP_HOME/$HIP_LIB_DIR"
+
+	AC_CHECK_FILE($HIP_HOME/$HIP_LIB_DIR/libhiprtc.so, [],
+		[AC_MSG_ERROR([libhiprtc.so library not found in path: $HIP_HOME/$HIP_LIB_DIR. Try running 
+					  configure again with the './configure --with-hip=PATH' argument.])]
+	)
+
+	AC_ARG_WITH([hipcc],
+	   [AS_HELP_STRING([--with-hipcc=PATH],[path where hipcc is installed (e.g. /opt/rocm/bin)])],
+	   [HIPCC_PATH=$withval],
+	   [HIPCC_PATH=$HIP_HOME/bin]
+	)
+	AC_PATH_PROG([HIPCC],[hipcc],[],[$HIPCC_PATH])
+	if test -z $HIPCC; then
+		AC_MSG_ERROR([ROCm hipcc compiler not found in path: $HIPCC_PATH. Try running 
+					  configure again with the './configure --with-hipcc=PATH' argument.])
+	fi
+
+	save_LDFLAGS="$LDFLAGS"
+	LDFLAGS="$LDFLAGS $HIP_LDFLAGS"
+
+	AC_CHECK_LIB([hiprtc], [hiprtcCreateProgram],[],[AC_MSG_ERROR([
+					  libhiprtc.so (hiprtcCreateProgram) was not found.])]
+	)
+	LDFLAGS="$save_LDFLAGS"
+	
+	#save_CPPFLAGS="$CPPFLAGS"
+	#CPPFLAGS="$CPPFLAGS $HIP_CFLAGS"
+	#AC_CHECK_HEADERS([hip/hip_runtime.h],,
+	#	AC_MSG_ERROR([Missing required HIP header files.]))
+	#CPPFLAGS="$save_CPPFLAGS"
+
+
+	HIPCCFLAGS="$HIP_CFLAGS $HIPCCFLAGS $HIP_ARCH_FLAGS $HIP_DEBUG $HIP_REGISTERS"
+
+])
+
+COMMONFLAGS="-DUNIX  $HIPALIGN_THREADS $COMMONFLAGS $PLATFORM $OPTIMIZATION -I$LIBMASA_PATH/src"
+CXXFLAGS="$DEBUG"
+
+AC_SUBST(HIP_CFLAGS)
+AC_SUBST(HIP_LIBS)
+AC_SUBST(HIPCC)
+AC_SUBST(HIPCCFLAGS)
+AC_SUBST(CXXFLAGS)
+AC_SUBST(COMMONFLAGS)
 
 AC_SUBST(LIBMASA_PATH)
-AC_SUBST(CXXFLAGS)
 
 AC_OUTPUT

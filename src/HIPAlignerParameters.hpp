@@ -19,24 +19,40 @@
  *
  ******************************************************************************/
 
-#include <stdio.h>
+#ifndef CUDALIGNERPARAMETERS_HPP_
+#define CUDALIGNERPARAMETERS_HPP_
+
 #include "libmasa/libmasa.hpp"
-#include "config.h"
-#include "HIPAligner.hpp"
 
 
 /**
- * Header of Execution.
+ * Constant used to select fastest GPU available.
  */
-#define HEADER 	PACKAGE_STRING"  -  GPU tool for huge sequences alignment\033[0m\n"
+#define DETECT_FASTEST_GPU (-1)
 
 /**
- * C entry point.
- *
- * @param argc number of arguments.
- * @param argv array of arguments.
- * @return return code.
+ * Parameters for the MASA-CUDA extension.
  */
-int main ( int argc, char** argv ) {
-	return libmasa_entry_point(argc, argv, new CUDAligner(), HEADER);
-}
+class CUDAlignerParameters : public AbstractAlignerParameters {
+private:
+	/** Selected GPU or DETECT_FASTEST_GPU for automatic selection */
+	int gpu;
+
+	/** Fixed number of blocks or 0 (zero) for auto configuration */
+	int blocks;
+
+public:
+	CUDAlignerParameters();
+	virtual ~CUDAlignerParameters();
+
+	virtual int processArgument(int argc, char** argv);
+	virtual void printUsage() const;
+
+	int getBlocks() const;
+	void setBlocks(int blocks);
+	int getGPU() const;
+	void setGPU(int gpu);
+
+};
+
+#endif /* CUDALIGNERPARAMETERS_HPP_ */

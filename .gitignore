@@ -1,3 +1,8 @@
+#IDE
+/.idea/
+/*.iml
+/.vscode/
+
 # Prerequisites
 *.d
 
@@ -6,6 +11,8 @@
 *.lo
 *.o
 *.obj
+
+/build/
 
 # Precompiled Headers
 *.gch
