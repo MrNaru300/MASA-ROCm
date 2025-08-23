@@ -10,6 +10,7 @@
 *.slo
 *.lo
 *.o
+*.hip_o
 *.obj
 
 /build/
