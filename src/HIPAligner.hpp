@@ -191,12 +191,12 @@ typedef struct {
  * @see The AbstractAligner and IAligner to understand the
  * Aligner implementation.
  */
-class CUDAligner : public AbstractDiagonalAligner {
+class HIPAligner : public AbstractDiagonalAligner {
 
 public:
 	/* Constructor and destructor */
-	CUDAligner();
-	~CUDAligner();
+	HIPAligner();
+	~HIPAligner();
 
 	/* Implementations of the IAligner virtual methods. @see IAligner class. */
 	virtual aligner_capabilities_t getCapabilities();
@@ -242,7 +242,7 @@ private:
 	/** Number of multiprocessor of the selected GPU */
 	int multiprocessors;
 	/** Command line parameters for this extension */
-	CUDAlignerParameters* params;
+	HIPAlignerParameters* params;
 	/** Smith Waterman parameters */
 	score_params_t score_params;
 

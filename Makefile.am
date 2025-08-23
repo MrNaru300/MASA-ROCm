@@ -19,7 +19,7 @@ noinst_HEADERS = \
 ./src/HIPAlignerParameters.hpp 
 
 HIPCCFLAGS += -ffast-math
-HIPCCFLAGS += --compiler-options -fno-strict-aliasing
+HIPCCFLAGS += -fno-strict-aliasing
 HIPCCFLAGS += $(COMMONFLAGS)
 
 clean-local:

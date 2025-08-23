@@ -33,7 +33,7 @@
 /**
  * Parameters for the MASA-CUDA extension.
  */
-class CUDAlignerParameters : public AbstractAlignerParameters {
+class HIPAlignerParameters : public AbstractAlignerParameters {
 private:
 	/** Selected GPU or DETECT_FASTEST_GPU for automatic selection */
 	int gpu;
@@ -42,8 +42,8 @@ private:
 	int blocks;
 
 public:
-	CUDAlignerParameters();
-	virtual ~CUDAlignerParameters();
+	HIPAlignerParameters();
+	virtual ~HIPAlignerParameters();
 
 	virtual int processArgument(int argc, char** argv);
 	virtual void printUsage() const;

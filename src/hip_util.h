@@ -31,37 +31,37 @@
 
 #include <hip/hip_runtime.h>
 
-#define cutilSafeCall(err)           __cudaSafeCall      (err, __FILE__, __LINE__)
-inline void __cudaSafeCall( cudaError err, const char *file, const int line )
+#define hipUtilSafeCall(err)           __hipSafeCall      (err, __FILE__, __LINE__)
+inline void __hipSafeCall( hipError_t err, const char *file, const int line )
 {
-    if( cudaSuccess != err) {
-		fprintf(stderr, "%s(%i) : cudaSafeCall() Runtime API error : %s.\n",
-                file, line, cudaGetErrorString( err) );
+    if( hipSuccess != err) {
+        fprintf(stderr, "%s(%i) : hipSafeCall() HIP Runtime API error : %s.\n",
+                file, line, hipGetErrorString( err) );
         exit(-1);
     }
 }
 
-#define cutilCheckMsg(msg)           __cutilCheckMsg     (msg, __FILE__, __LINE__)
-inline void __cutilCheckMsg( const char *errorMessage, const char *file, const int line )
+#define hipUtilCheckMsg(msg)           __hipCheckMsg     (msg, __FILE__, __LINE__)
+inline void __hipCheckMsg( const char *errorMessage, const char *file, const int line )
 {
-    cudaError_t err = cudaGetLastError();
-    if( cudaSuccess != err) {
-        fprintf(stderr, "%s(%i) : cutilCheckMsg() CUTIL CUDA error : %s : %s.\n",
-                file, line, errorMessage, cudaGetErrorString( err) );
+    hipError_t err = hipGetLastError();
+    if( hipSuccess != err) {
+        fprintf(stderr, "%s(%i) : hipCheckMsg() HIP error : %s : %s.\n",
+                file, line, errorMessage, hipGetErrorString( err) );
         exit(-1);
     }
 #ifdef _DEBUG
-    err = cudaThreadSynchronize();
-    if( cudaSuccess != err) {
-		fprintf(stderr, "%s(%i) : cutilCheckMsg cudaThreadSynchronize error: %s : %s.\n",
-                file, line, errorMessage, cudaGetErrorString( err) );
+    err = hipDeviceSynchronize();
+    if( hipSuccess != err) {
+        fprintf(stderr, "%s(%i) : hipCheckMsg hipDeviceSynchronize error: %s : %s.\n",
+                file, line, errorMessage, hipGetErrorString( err) );
         exit(-1);
     }
 #endif
 }
 
-void* allocCuda0(int size);
-unsigned char* allocCudaSeq(const char* data, const int len, const int padding_len=0, const char padding_char='\0');
+void* allocHip0(int size);
+unsigned char* allocHipSeq(const char* data, const int len, const int padding_len=0, const char padding_char='\0');
 void printDevProp(FILE* file=stdout);
 void getMemoryUsage(size_t* freeMem, size_t* totalMem=NULL);
 void printGPUDevices(FILE* file=stdout);

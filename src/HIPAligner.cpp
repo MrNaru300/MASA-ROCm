@@ -38,6 +38,7 @@
  */
 #define MAX_GPUS		(8)
 
+//TODO: Verificar se existe limitação para HIP
 /**
  * Maximum sequence size considering the 2^27 CUDA texture limit.
  */
@@ -49,16 +50,16 @@
 /* ************************************************************************** */
 
 /**
- * Instantiates the CUDAligner object.
+ * Instantiates the HIPAligner object.
  */
-CUDAligner::CUDAligner() {
+HIPAligner::HIPAligner() {
 	/* Hard-coded alignment parameters */
 	score_params.match = DNA_MATCH;
 	score_params.mismatch = DNA_MISMATCH;
 	score_params.gap_open = DNA_GAP_OPEN;
 	score_params.gap_ext = DNA_GAP_EXT;
 
-	params = new CUDAlignerParameters();
+	params = new HIPAlignerParameters();
 
 	/* Obtains the GPU weights for multiprocess forked instances */
 	int weight[MAX_GPUS];
@@ -67,9 +68,9 @@ CUDAligner::CUDAligner() {
 }
 
 /**
- * Destroys the CUDAligner object.
+ * Destroys the HIPAligner object.
  */
-CUDAligner::~CUDAligner() {
+HIPAligner::~HIPAligner() {
 
 }
 
@@ -84,7 +85,7 @@ CUDAligner::~CUDAligner() {
  * @return the aligner_capabilities_t object containing the capabilities of
  * 	this Aligner.
  */
-aligner_capabilities_t CUDAligner::getCapabilities() {
+aligner_capabilities_t HIPAligner::getCapabilities() {
 	aligner_capabilities_t capabilities;
 	capabilities.smith_waterman 			= SUPPORTED;
 	capabilities.needleman_wunsch 			= SUPPORTED;
@@ -112,29 +113,29 @@ aligner_capabilities_t CUDAligner::getCapabilities() {
 
 /**
  * Returns the Custom Parameters of this Aligner.
- * @return the CUDAlignerParameters associated with this aligner.
+ * @return the HIPAlignerParameters associated with this aligner.
  */
-AbstractAlignerParameters* CUDAligner::getParameters() {
+AbstractAlignerParameters* HIPAligner::getParameters() {
 	return this->params;
 }
 
 /**
- * Returns the SW score parameters. Currently, CUDAlign uses only fixed parameters.
+ * Returns the SW score parameters. Currently, HIPAlign uses only fixed parameters.
  * @return the object containing the score parameters.
  */
-const score_params_t* CUDAligner::getScoreParameters() {
+const score_params_t* HIPAligner::getScoreParameters() {
 	return &score_params;
 }
 
 /**
  * Initialize the aligner. This method is called only once during the
- * aligner lifetime. Here we already have the CUDAlignerParameters
+ * aligner lifetime. Here we already have the HIPAlignerParameters
  * completely set and, then, we initialize the selected GPU and allocated
  * the fixed structures that will be used during all the execution.
  *
  * @see IAligner::initialize()
  */
-void CUDAligner::initialize() {
+void HIPAligner::initialize() {
 	if (this->params->getForkId() != NOT_FORKED_INSTANCE) {
 		/* Selects a different GPU for each process */
 		int ids[MAX_GPUS];
@@ -149,10 +150,10 @@ void CUDAligner::initialize() {
 	}
 	selectGPU(this->params->getGPU());
 
-	/* Checks CUDA capability */
+	/* Checks HIP capability */
 	if (getCompiledCapability() > getDevCapability()) {
 			fprintf(stderr, "FATAL: Unsupported GPU Device Capability. (%d < %d).\n", getDevCapability(), getCompiledCapability());
-			fprintf(stderr, "Maybe you should try to recompile the code with an old cuda architecture.\n");
+			fprintf(stderr, "Maybe you should try to recompile the code with an old hip architecture.\n");
 			exit(1);
 	}
 
@@ -166,17 +167,17 @@ void CUDAligner::initialize() {
 /**
  * Finalizes the execution of the Smith-Waterman.
  */
-void CUDAligner::finalize() {
+void HIPAligner::finalize() {
 	freeGlobalStructures();
 
-	cudaDeviceReset();
-	cutilCheckMsg("cudaDeviceReset failed");
+	hipDeviceReset();
+	hipUtilCheckMsg("hipDeviceReset failed");
 }
 
 /**
  * Initializes structures before processing diagonals.
  */
-void CUDAligner::initializeDiagonals() {
+void HIPAligner::initializeDiagonals() {
 	int blocks = getGrid()->getGridWidth();
 
 	/* Defines the proper grid division */
@@ -189,7 +190,7 @@ void CUDAligner::initializeDiagonals() {
 		host.h_blockResult[i].z = -INF;
 		host.h_blockResult[i].w = -INF;
 	}
-	cutilSafeCall(cudaMemcpy(cuda.d_blockResult, host.h_blockResult, sizeof(int4)*blocks, cudaMemcpyHostToDevice));
+	hipUtilSafeCall(hipMemcpy(cuda.d_blockResult, host.h_blockResult, sizeof(int4)*blocks, hipMemcpyHostToDevice));
 }
 
 /**
@@ -199,7 +200,7 @@ void CUDAligner::initializeDiagonals() {
  * @param windowLeft pruning window left.
  * @param windowRight pruning window right.
  */
-void CUDAligner::processDiagonal(int diagonal, int windowLeft, int windowRight) {
+void HIPAligner::processDiagonal(int diagonal, int windowLeft, int windowRight) {
 	int2 cutBlock;
 	cutBlock = make_int2(windowLeft, windowRight);
 
@@ -211,7 +212,7 @@ void CUDAligner::processDiagonal(int diagonal, int windowLeft, int windowRight) 
 /**
  * Finalizes structures after processing diagonals.
  */
-void CUDAligner::finalizeDiagonals() {
+void HIPAligner::finalizeDiagonals() {
 	// Does nothing
 }
 
@@ -226,9 +227,9 @@ void CUDAligner::finalizeDiagonals() {
  * @param seq1_len	horizontal sequence length.
  * @see IAligner::setSequences
  */
-void CUDAligner::setSequences(
+void HIPAligner::setSequences(
 		const char* seq0, const char* seq1, int seq0_len, int seq1_len) {
-	if (DEBUG) printf("CUDAligner::allocateStructures(%d,%d)\n", seq0_len, seq1_len);
+	if (DEBUG) printf("HIPAligner::allocateStructures(%d,%d)\n", seq0_len, seq1_len);
 	if (seq0_len == 0 || seq1_len == 0) {
 		// TODO ensure in the AlignerManager that the onSequenceChange will
 		// only be executed if the sequences are not zero-length
@@ -250,13 +251,13 @@ void CUDAligner::setSequences(
 
 	host.h_busH = (int2* )malloc(bus_size);
 
-	cuda.d_seq0 = allocCudaSeq(seq0, seq0_len, seq0_padding, '\0');
-	cuda.d_seq1 = allocCudaSeq(seq1, seq1_len, seq1_padding, '\0');
+	cuda.d_seq0 = allocHipSeq(seq0, seq0_len, seq0_padding, '\0');
+	cuda.d_seq1 = allocHipSeq(seq1, seq1_len, seq1_padding, '\0');
 	cuda.busH_size = bus_size;
 
 	bind_textures(cuda.d_seq0, seq0_len+seq0_padding, cuda.d_seq1, seq1_len+seq1_padding);
 
-	cuda.d_busH         = (int2*)  allocCuda0(bus_size);
+	cuda.d_busH         = (int2*)  allocHip0(bus_size);
 
     size_t usedMemory;
 	getMemoryUsage(&usedMemory);
@@ -267,19 +268,19 @@ void CUDAligner::setSequences(
 /**
  * Dispose all structures related to the sequence sizes.
  */
-void CUDAligner::unsetSequences() {
-	if (DEBUG) printf("CUDAligner::freeStructures()\n");
+void HIPAligner::unsetSequences() {
+	if (DEBUG) printf("HIPAligner::freeStructures()\n");
 
 	free(host.h_busH);
 	host.h_busH = NULL;
 
-	cutilSafeCall(cudaFree(cuda.d_seq0));
-	cutilSafeCall(cudaFree(cuda.d_seq1));
+	hipUtilSafeCall(hipFree(cuda.d_seq0));
+	hipUtilSafeCall(hipFree(cuda.d_seq1));
 	cuda.d_seq0 = NULL;
 	cuda.d_seq1 = NULL;
 	unbind_textures();
 
-	cutilSafeCall(cudaFree(cuda.d_busH));
+	hipUtilSafeCall(hipFree(cuda.d_busH));
 	cuda.d_busH = NULL;
 
 	size_t usedMemory;
@@ -292,7 +293,7 @@ void CUDAligner::unsetSequences() {
  * multiplied by ALPHA (4).
  * @return the height of the blocks.
  */
-int CUDAligner::getBlockHeight() {
+int HIPAligner::getBlockHeight() {
 	return getThreadCount()*ALPHA;
 }
 
@@ -302,9 +303,9 @@ int CUDAligner::getBlockHeight() {
  *
  * @param width partition's width
  * @return number of CUDA blocks. It is always less than MAX_BLOCKS and
- * than CUDAlignerParameters::blocks.
+ * than HIPAlignerParameters::blocks.
  */
-int CUDAligner::getGridWidth(const int width) {
+int HIPAligner::getGridWidth(const int width) {
 	int blocks = params->getBlocks();
 	const int recommended = 4 * multiprocessors; // recommended number of simultaneous blocks per MP
 	int maximum; // maximum recommended number of blocks per MP
@@ -352,8 +353,12 @@ int CUDAligner::getGridWidth(const int width) {
  * @param j index of the first cell to be loaded.
  * @param len number of cells to be loaded.
  */
-cell_t* CUDAligner::getLastRow(int j, int len) {
-    cudaStreamSynchronize(0);
+cell_t* HIPAligner::getLastRow(int j, int len) {
+    hipError_t err = hipStreamSynchronize(0);
+	if (err != hipSuccess) {
+		fprintf(stderr, "Error synchronizing stream: %s\n", hipGetErrorString(err));
+		return nullptr;
+	}
     int j0 = getPartition().getJ0();
 
 	/*
@@ -370,15 +375,15 @@ cell_t* CUDAligner::getLastRow(int j, int len) {
 		int diff = j0 - (j-shift);
 		if (diff > len) diff = len;
 		if (DEBUG) printf("EXTRA x0: %d  diff: %d   xLen: %d!  mem: %p\n", j, diff, len, cuda.d_extraH);
-	    cutilSafeCall(cudaMemcpy(host.h_busH+j, cuda.d_extraH,
-	    		(diff)*sizeof(int2), cudaMemcpyDeviceToHost));
+	    hipUtilSafeCall(hipMemcpy(host.h_busH+j, cuda.d_extraH,
+	    		(diff)*sizeof(int2), hipMemcpyDeviceToHost));
 	    if (len-diff > 0) {
-	    	cutilSafeCall(cudaMemcpy(host.h_busH+j+diff, cuda.d_busH+j0,
-	    			(len-diff)*sizeof(int2), cudaMemcpyDeviceToHost));
+	    	hipUtilSafeCall(hipMemcpy(host.h_busH+j+diff, cuda.d_busH+j0,
+	    			(len-diff)*sizeof(int2), hipMemcpyDeviceToHost));
 	    }
 	} else {
-	    cutilSafeCall(cudaMemcpy(host.h_busH+j, cuda.d_busH+j-shift,
-	    		(len)*sizeof(int2), cudaMemcpyDeviceToHost));
+	    hipUtilSafeCall(hipMemcpy(host.h_busH+j, cuda.d_busH+j-shift,
+	    		(len)*sizeof(int2), hipMemcpyDeviceToHost));
 	}
 	return (cell_t*)(host.h_busH + j);
 }
@@ -390,11 +395,21 @@ cell_t* CUDAligner::getLastRow(int j, int len) {
  * @param j index of the first cell to be loaded.
  * @param len number of cells to be loaded.
  */
-cell_t* CUDAligner::getSpecialRow(int j, int len) {
-	cudaStreamSynchronize(0);
-	cutilSafeCall(cudaMemcpy(host.h_busH + j, cuda.d_busH + j, len * sizeof(int2),
-					cudaMemcpyDeviceToHost));
-	cudaStreamSynchronize(0);
+cell_t* HIPAligner::getSpecialRow(int j, int len) {
+	hipError_t err = hipStreamSynchronize(0);
+	if (err != hipSuccess) {
+		fprintf(stderr, "Error synchronizing stream: %s\n", hipGetErrorString(err));
+		return nullptr;
+	}
+	hipUtilSafeCall(hipMemcpy(host.h_busH + j, cuda.d_busH + j, len * sizeof(int2),
+					hipMemcpyDeviceToHost));
+	
+	err = hipStreamSynchronize(0);
+	if (err != hipSuccess) {
+		fprintf(stderr, "Error synchronizing stream: %s\n", hipGetErrorString(err));
+		return nullptr;
+	}
+	
 	return (cell_t*)(host.h_busH + j);
 }
 
@@ -404,12 +419,12 @@ cell_t* CUDAligner::getSpecialRow(int j, int len) {
  * @param i index of the first cell to be loaded.
  * @param len number of cells to be loaded.
  */
-cell_t* CUDAligner::getLastColumn(int i, int len) {
+cell_t* HIPAligner::getLastColumn(int i, int len) {
 	// unused parameters.
 
 	int _len = THREADS_COUNT;
-	cutilSafeCall(cudaMemcpy(host.h_flushColumnH, cuda.d_flushColumnH, _len*sizeof(int4), cudaMemcpyDeviceToHost));
-	cutilSafeCall(cudaMemcpy(host.h_flushColumnE, cuda.d_flushColumnE, _len*sizeof(int4), cudaMemcpyDeviceToHost));
+	hipUtilSafeCall(hipMemcpy(host.h_flushColumnH, cuda.d_flushColumnH, _len*sizeof(int4), hipMemcpyDeviceToHost));
+	hipUtilSafeCall(hipMemcpy(host.h_flushColumnE, cuda.d_flushColumnE, _len*sizeof(int4), hipMemcpyDeviceToHost));
 
 	/*
 	 * We will interleave the H and E components into a vector, considering
@@ -438,9 +453,9 @@ cell_t* CUDAligner::getLastColumn(int i, int len) {
 /**
  * Returns a vector from the GPU containing the best score of each block.
  */
-score_t* CUDAligner::getBlockScores() {
+score_t* HIPAligner::getBlockScores() {
 	int blocks = getGrid()->getGridWidth();
-	cutilSafeCall(cudaMemcpy(host.h_blockResult, cuda.d_blockResult, sizeof(int4)*blocks, cudaMemcpyDeviceToHost));
+	hipUtilSafeCall(hipMemcpy(host.h_blockResult, cuda.d_blockResult, sizeof(int4)*blocks, hipMemcpyDeviceToHost));
 	for (int k=0; k<blocks; k++) {
 		host.h_blockScores[k].i = host.h_blockResult[k].y;
 		host.h_blockScores[k].j = host.h_blockResult[k].x;
@@ -458,10 +473,10 @@ score_t* CUDAligner::getBlockScores() {
  * @param j column where the vector starts.
  * @param len length of the vector.
  */
-void CUDAligner::setFirstRow(const cell_t* cells, int j, int len) {
-	if (DEBUG) fprintf(stderr, "CUDAligner::setFirstRow(..., %d, %d)\n", j, len);
-	cutilSafeCall(cudaMemcpy(cuda.d_busH + j, cells,
-			len*sizeof(int2), cudaMemcpyHostToDevice));
+void HIPAligner::setFirstRow(const cell_t* cells, int j, int len) {
+	if (DEBUG) fprintf(stderr, "HIPAligner::setFirstRow(..., %d, %d)\n", j, len);
+	hipUtilSafeCall(hipMemcpy(cuda.d_busH + j, cells,
+			len*sizeof(int2), hipMemcpyHostToDevice));
 }
 
 /**
@@ -471,7 +486,7 @@ void CUDAligner::setFirstRow(const cell_t* cells, int j, int len) {
  * @param i row where the vector starts.
  * @param len length of the vector.
  */
-void CUDAligner::setFirstColumn(const cell_t* cells, int i, int len) {
+void HIPAligner::setFirstColumn(const cell_t* cells, int i, int len) {
 	/* Repeat previous diagonal cell */
     host.h_loadColumnH[0].w = cells[0].h;
     host.h_loadColumnE[0].w = cells[0].e;
@@ -497,10 +512,10 @@ void CUDAligner::setFirstColumn(const cell_t* cells, int i, int len) {
 		host.h_loadColumnE[k].z = cells[k * ALPHA - 1].e;
 		host.h_loadColumnE[k].w = cells[k * ALPHA - 0].e;
 	}
-	cutilSafeCall(cudaMemcpy(cuda.d_loadColumnH, host.h_loadColumnH,
-					(getBlockHeight() + 4) * sizeof(int), cudaMemcpyHostToDevice));
-	cutilSafeCall(cudaMemcpy(cuda.d_loadColumnE, host.h_loadColumnE,
-					(getBlockHeight() + 4) * sizeof(int), cudaMemcpyHostToDevice));
+	hipUtilSafeCall(hipMemcpy(cuda.d_loadColumnH, host.h_loadColumnH,
+					(getBlockHeight() + 4) * sizeof(int), hipMemcpyHostToDevice));
+	hipUtilSafeCall(hipMemcpy(cuda.d_loadColumnE, host.h_loadColumnE,
+					(getBlockHeight() + 4) * sizeof(int), hipMemcpyHostToDevice));
 }
 
 /**
@@ -508,7 +523,7 @@ void CUDAligner::setFirstColumn(const cell_t* cells, int i, int len) {
  * @param b0 first block to be cleaned (inclusive).
  * @param b1 last block be cleaned (exclusive).
  */
-void CUDAligner::clearPrunedBlocks(int b0, int b1) {
+void HIPAligner::clearPrunedBlocks(int b0, int b1) {
 	int p0;
 	int p1;
 	getGrid()->getBlockPosition(b0, 0, NULL, &p0, NULL, NULL);
@@ -524,7 +539,7 @@ void CUDAligner::clearPrunedBlocks(int b0, int b1) {
 /**
  * Clear the internal statistics.
  */
-void CUDAligner::clearStatistics() {
+void HIPAligner::clearStatistics() {
 	AbstractDiagonalAligner::clearStatistics();
 }
 
@@ -532,17 +547,17 @@ void CUDAligner::clearStatistics() {
  * MASA-Core call this method to print some statistics after initialization.
  * @param file handler to print out the statistics.
  */
-void CUDAligner::printInitialStatistics(FILE* file) {
+void HIPAligner::printInitialStatistics(FILE* file) {
 	AbstractDiagonalAligner::printInitialStatistics(file);
 
 	fprintf(file, "\n===== GPU DEVICE INFO  =====\n");
 	printDevProp(file);
 
-	fprintf(file, "\n===== CUDA COMPILER PARAMETERS  =====\n");
+	fprintf(file, "\n===== HIP COMPILER PARAMETERS  =====\n");
 	fprintf(file, " MAX BLOCKS: %d\n", MAX_BLOCKS_COUNT);
 	fprintf(file, "    THREADS: %d\n", THREADS_COUNT);
 	fprintf(file, "      ALPHA: %d\n", ALPHA);
-	fprintf(file, "  CUDA ARCH: %.1f\n", getCompiledCapability()/100.0f);
+	fprintf(file, "  HIP ARCH: %.1f\n", getCompiledCapability()/100.0f);
 	fprintf(file, "  MAX_SEQUENCE_SIZE: %d\n", MAX_SEQUENCE_SIZE);
 
 	fprintf(file, "\n===== GPU MEMORY USAGE =====\n");
@@ -563,7 +578,7 @@ void CUDAligner::printInitialStatistics(FILE* file) {
  * MASA-Core call this method to print some statistics in the start of a stage.
  * @param file handler to print out the statistics.
  */
-void CUDAligner::printStageStatistics(FILE* file) {
+void HIPAligner::printStageStatistics(FILE* file) {
 	AbstractDiagonalAligner::printStageStatistics(file);
 
 	fprintf(file, "\n========== GPU MEMORY USAGE ==========\n");
@@ -576,7 +591,7 @@ void CUDAligner::printStageStatistics(FILE* file) {
  * MASA-Core call this method to print some statistics after finalization.
  * @param file handler to print out the statistics.
  */
-void CUDAligner::printFinalStatistics(FILE* file) {
+void HIPAligner::printFinalStatistics(FILE* file) {
 	AbstractDiagonalAligner::printFinalStatistics(file);
 
 	fprintf(file, "\n========== FINAL MEMORY USAGE ==========\n");
@@ -589,7 +604,7 @@ void CUDAligner::printFinalStatistics(FILE* file) {
  * MASA-Core prints this statistics to show internal statistics of the Aligner.
  * @param file handler to print out the statistics.
  */
-void CUDAligner::printStatistics(FILE* file) {
+void HIPAligner::printStatistics(FILE* file) {
 	AbstractDiagonalAligner::printStatistics(file);
 
 	fprintf(file, "\n===== GPU MEMORY USAGE =====\n");
@@ -608,7 +623,7 @@ void CUDAligner::printStatistics(FILE* file) {
  * Allocates the fixed structures for all the executions. This method is called
  * only once during the lifetime of the extension.
  */
-void CUDAligner::allocateGlobalStructures() {
+void HIPAligner::allocateGlobalStructures() {
 	getMemoryUsage(&statInitialUsedMemory, &statTotalMem);
 
 	host.h_extraH          = (int2* )  malloc(THREADS_COUNT*sizeof(int2));
@@ -621,15 +636,15 @@ void CUDAligner::allocateGlobalStructures() {
 	host.h_blockScores     = (score_t*)malloc(MAX_BLOCKS_COUNT*sizeof(score_t));
 	host.h_busH            = NULL;
 
-	cuda.d_extraH       = (int2*) allocCuda0(THREADS_COUNT*sizeof(int2));
-	cuda.d_flushColumnH = (int4*) allocCuda0(THREADS_COUNT*sizeof(int4));
-	cuda.d_flushColumnE = (int4*) allocCuda0(THREADS_COUNT*sizeof(int4));
-	cuda.d_loadColumnH  = (int4*) allocCuda0((THREADS_COUNT+1)*sizeof(int4));
-	cuda.d_loadColumnE  = (int4*) allocCuda0((THREADS_COUNT+1)*sizeof(int4));
-	cuda.d_blockResult  = (int4*) allocCuda0(MAX_BLOCKS_COUNT*sizeof(int4));
-	cuda.d_busV_h       = (int4*) allocCuda0(MAX_GRID_HEIGHT*sizeof(int4));
-	cuda.d_busV_e       = (int4*) allocCuda0(MAX_GRID_HEIGHT*sizeof(int4));
-	cuda.d_busV_o       = (int3*) allocCuda0(MAX_GRID_HEIGHT*sizeof(int3));
+	cuda.d_extraH       = (int2*) allocHip0(THREADS_COUNT*sizeof(int2));
+	cuda.d_flushColumnH = (int4*) allocHip0(THREADS_COUNT*sizeof(int4));
+	cuda.d_flushColumnE = (int4*) allocHip0(THREADS_COUNT*sizeof(int4));
+	cuda.d_loadColumnH  = (int4*) allocHip0((THREADS_COUNT+1)*sizeof(int4));
+	cuda.d_loadColumnE  = (int4*) allocHip0((THREADS_COUNT+1)*sizeof(int4));
+	cuda.d_blockResult  = (int4*) allocHip0(MAX_BLOCKS_COUNT*sizeof(int4));
+	cuda.d_busV_h       = (int4*) allocHip0(MAX_GRID_HEIGHT*sizeof(int4));
+	cuda.d_busV_e       = (int4*) allocHip0(MAX_GRID_HEIGHT*sizeof(int4));
+	cuda.d_busV_o       = (int3*) allocHip0(MAX_GRID_HEIGHT*sizeof(int3));
 	cuda.d_seq0         = NULL;
 	cuda.d_seq1         = NULL;
 	cuda.d_busH         = NULL;
@@ -643,7 +658,7 @@ void CUDAligner::allocateGlobalStructures() {
 /**
  * Deallocates the fixed structures.
  */
-void CUDAligner::freeGlobalStructures() {
+void HIPAligner::freeGlobalStructures() {
 	if (DEBUG) printf("freeFixedSizeStructures()\n");
 	free(host.h_extraH);
 	free(host.h_flushColumnH);
@@ -654,15 +669,15 @@ void CUDAligner::freeGlobalStructures() {
 	free(host.h_blockResult);
 	free(host.h_blockScores);
 
-	cutilSafeCall(cudaFree(cuda.d_extraH));
-	cutilSafeCall(cudaFree(cuda.d_flushColumnH));
-	cutilSafeCall(cudaFree(cuda.d_flushColumnE));
-	cutilSafeCall(cudaFree(cuda.d_loadColumnH));
-	cutilSafeCall(cudaFree(cuda.d_loadColumnE));
-	cutilSafeCall(cudaFree(cuda.d_blockResult));
-	cutilSafeCall(cudaFree(cuda.d_busV_h));
-	cutilSafeCall(cudaFree(cuda.d_busV_e));
-	cutilSafeCall(cudaFree(cuda.d_busV_o));
+	hipUtilSafeCall(hipFree(cuda.d_extraH));
+	hipUtilSafeCall(hipFree(cuda.d_flushColumnH));
+	hipUtilSafeCall(hipFree(cuda.d_flushColumnE));
+	hipUtilSafeCall(hipFree(cuda.d_loadColumnH));
+	hipUtilSafeCall(hipFree(cuda.d_loadColumnE));
+	hipUtilSafeCall(hipFree(cuda.d_blockResult));
+	hipUtilSafeCall(hipFree(cuda.d_busV_h));
+	hipUtilSafeCall(hipFree(cuda.d_busV_e));
+	hipUtilSafeCall(hipFree(cuda.d_busV_o));
 
     size_t usedMemory;
 	getMemoryUsage(&usedMemory);
@@ -679,6 +694,6 @@ void CUDAligner::freeGlobalStructures() {
  *
  * @return the number of threads in each block.
  */
-int CUDAligner::getThreadCount() {
+int HIPAligner::getThreadCount() {
 	return getPartition().getWidth() <=THREADS_COUNT ? getPartition().getWidth() : THREADS_COUNT;
 }

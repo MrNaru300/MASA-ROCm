@@ -19,13 +19,14 @@
  *
  ******************************************************************************/
 
-#include "CUDAligner.hpp"
-#include "cuda_util.h"
+#include "HIPAligner.hpp"
+#include "hip_util.h"
 #include "config.h"
 
 #include <stdio.h>
 #include <getopt.h>
 
+//TODO: Change the comments
 /**
  * @file CUDAligner.cu
  * @brief CUDAligner related kernels and wrappers.
@@ -71,12 +72,12 @@
 /**
  * Texture definition for the DNA of sequence#0 (vertical in the DP matrix).
  */
-texture<unsigned char, 1, cudaReadModeElementType> t_seq0;
+texture<unsigned char, 1, hipReadModeElementType> t_seq0;
 
 /**
  * Texture definition for the DNA of sequence#1 (horizontal in the DP matrix).
  */
-texture<unsigned char, 1, cudaReadModeElementType> t_seq1;
+texture<unsigned char, 1, hipReadModeElementType> t_seq1;
 
 
 /**
@@ -91,7 +92,7 @@ texture<unsigned char, 1, cudaReadModeElementType> t_seq1;
  * for safety. For the single phase execution (small sequences), this
  * optimization must be disabled.
  */
-texture<         int2, 1, cudaReadModeElementType> t_busH;
+texture<         int2, 1, hipReadModeElementType> t_busH;
 
 
 
@@ -1184,16 +1185,16 @@ static __global__ void kernel_initialize_busH_ungapped(int2* busH, const int j0,
  * @param seq1_len sequence 1 length
  */
 void bind_textures(const unsigned char* seq0, const int seq0_len, const unsigned char* seq1, const int seq1_len) {
-	cutilSafeCall(cudaBindTexture(0, t_seq0, seq0, seq0_len));
-	cutilSafeCall(cudaBindTexture(0, t_seq1, seq1, seq1_len));
+	hipUtilSafeCall(hipBindTexture(0, t_seq0, seq0, seq0_len));
+	hipUtilSafeCall(hipBindTexture(0, t_seq1, seq1, seq1_len));
 }
 
 /**
  * Unbind the textures for the DNA sequences.
  */
 void unbind_textures() {
-	cutilSafeCall(cudaUnbindTexture(t_seq1));
-	cutilSafeCall(cudaUnbindTexture(t_seq0));
+	hipUtilSafeCall(hipUnbindTexture(t_seq1));
+	hipUtilSafeCall(hipUnbindTexture(t_seq0));
 }
 
 /**
@@ -1205,7 +1206,7 @@ void unbind_textures() {
  * @param blocks number of blocks.
  */
 void copy_split(const int* split, const int blocks) {
-	cutilSafeCall(cudaMemcpyToSymbol(d_split, split, (blocks+1)*sizeof(int)));
+	hipUtilSafeCall(hipMemcpyToSymbol(d_split, split, (blocks+1)*sizeof(int)));
 }
 
 /**
@@ -1218,13 +1219,13 @@ void initializeBusHInfinity(const int p0, const int p1, int2* d_busH) {
 	dim3 threads(512, 1, 1);
 	dim3 blocks(MAX_BLOCKS_COUNT, 1, 1);
 	kernel_initialize_busH_ungapped<-INF,-INF><<<threads, blocks>>>(d_busH, p0, p1-p0);
-	cutilCheckMsg("Kernel execution failed");
+	hipUtilCheckMsg("Kernel execution failed");
 }
 //void CUDAligner::initializeBusHUngapped(const int p0, const int p1) {
 //	dim3 threads(512, 1, 1);
 //	dim3 blocks(BLOCKS_COUNT, 1, 1);
 //	kernel_initialize_busH_ungapped<0,-INF><<<threads, blocks>>>(cuda.d_busH, p0, p1-p0);
-//	cutilCheckMsg("Kernel execution failed");
+//	hipUtilCheckMsg("Kernel execution failed");
 //}
 
 /****************************************************************************
@@ -1262,7 +1263,7 @@ template <int COLUMN_SOURCE, int COLUMN_DESTINATION, int RECURRENCE_TYPE, int CH
 void lauch_external_diagonals(const int blocks, const int threads,
 		const int i0, const int i1,
 		const int step, const int2 cutBlock, cuda_structures_t* cuda) {
-	cutilSafeCall(cudaBindTexture(0, t_busH, cuda->d_busH, cuda->busH_size));
+	hipUtilSafeCall(hipBindTexture(0, t_busH, cuda->d_busH, cuda->busH_size));
 	dim3 grid( blocks, 1, 1);
 	if (blocks == 1) {
 		dim3 block( threads, 1, 1);
@@ -1272,9 +1273,11 @@ void lauch_external_diagonals(const int blocks, const int threads,
 		kernel_long_phase<RECURRENCE_TYPE, CHECK_LOCATION><<< grid, threads, 0>>>(i0, i1, step-1, cutBlock, cuda->d_blockResult, cuda->d_busH, cuda->d_extraH, cuda->d_busV_h, cuda->d_busV_e, cuda->d_busV_o);
 		kernel_short_phase<COLUMN_SOURCE, COLUMN_DESTINATION, RECURRENCE_TYPE, CHECK_LOCATION><<< grid, threads, 0>>>(i0, i1, step, cutBlock, cuda->d_blockResult, cuda->d_busH, cuda->d_extraH, cuda->d_busV_h, cuda->d_busV_e, cuda->d_busV_o, cuda->d_loadColumnH, cuda->d_loadColumnE, cuda->d_flushColumnH, cuda->d_flushColumnE);
 	}
-	cudaStreamSynchronize(0);
-	cutilCheckMsg("Kernel execution failed");
-	cutilSafeCall(cudaUnbindTexture(t_busH));
+	hipError_t err = hipStreamSynchronize(0);
+	if (err != hipSuccess) {
+		hipUtilCheckMsg("Kernel execution failed");
+	}
+	hipUtilSafeCall(hipUnbindTexture(t_busH));
 }
 
 

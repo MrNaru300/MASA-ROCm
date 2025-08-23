@@ -38,5 +38,5 @@
  * @return return code.
  */
 int main ( int argc, char** argv ) {
-	return libmasa_entry_point(argc, argv, new CUDAligner(), HEADER);
+	return libmasa_entry_point(argc, argv, new HIPAligner(), HEADER);
 }
