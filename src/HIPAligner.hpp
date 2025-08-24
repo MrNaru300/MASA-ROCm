@@ -19,7 +19,7 @@
  *
  ******************************************************************************/
 
-#define __HIP_PLATFORM_AMD__ 1
+#define __HIP_PLATFORM_AMD__
 
 #ifndef SMITH_WATERMAN_H_
 #define SMITH_WATERMAN_H_
@@ -30,7 +30,7 @@
 #include <hip/hip_runtime.h>
 
 /*
- * The HIPAligner class is the Aligner implementation of the MASA-HIPAlign
+ * The HIPAligner class is the Aligner implementation of the MASA-ROCm
  * extensions. This class is divided in three files.
  *
  *  - HIPAlign.hpp: class header file. (compiled with g++)
@@ -45,14 +45,14 @@
 
 
 /**
- * Number of threads used in the CUDAlign kernels
+ * Number of threads used in the HIPAlign kernels
  */
 #ifndef THREADS_COUNT
 #define THREADS_COUNT 64
 #endif
 
 /**
- * Maximum number of CUDA blocks in an external diagonal.
+ * Maximum number of GPU blocks in an external diagonal.
  */
 #define MAX_BLOCKS_COUNT    512
 
@@ -64,7 +64,7 @@
 #define ALPHA (4)
 
 /**
- * The height of a CUDA grid, i.e. CUDA THREADS x CUDA BLOCKS.
+ * The height of a GPU grid, i.e. GPU THREADS x GPU BLOCKS.
  */
 #define MAX_GRID_HEIGHT     (THREADS_COUNT*MAX_BLOCKS_COUNT)
 
@@ -101,7 +101,7 @@
 
 
 /** @brief Structure containing all the host memory structures.
- * The host_structures_t and cuda_structures_t are used to transfer
+ * The host_structures_t and hip_structures_t are used to transfer
  * data between CPU-GPU. Usually there are equivalent vectors in both
  * structures.
  */
@@ -112,7 +112,7 @@ typedef struct {
 	int2* h_busH;
 	/**
 	 * Vector for storing the last row shifted bus.
-	 * @see CUDAligner::loadLastRow and kernel_flush methods
+	 * @see HIPAligner::loadLastRow and kernel_flush methods
 	 */
 	int2* h_extraH;
 	/**
@@ -128,7 +128,7 @@ typedef struct {
 	/**
 	 * Vector used to interleave the 4-pack H and E components to a structure
 	 * to be dispatched to the MASA-core.
-	 * @see CUDAligner::getLastColumn() method.
+	 * @see HIPAligner::getLastColumn() method.
 	 */
 	cell_t* h_flushColumn;
 	/**
@@ -150,12 +150,12 @@ typedef struct {
 	score_t* h_blockScores;
 } host_structures_t;
 
-/** @brief Structure containing all the CUDA memory structures.
+/** @brief Structure containing all the HIP memory structures.
  */
 typedef struct {
-	/** CUDA vector containing the sequence S_0 (vertical) */
+	/** HIP vector containing the sequence S_0 (vertical) */
 	unsigned char* d_seq0;
-	/** CUDA vector containing the sequence S_1 (horizontal) */
+	/** HIP vector containing the sequence S_1 (horizontal) */
 	unsigned char* d_seq1;
 	/** Equivalent vector of host_structures_t::h_busH */
 	int2* d_busH;
@@ -171,21 +171,21 @@ typedef struct {
 	int4* d_loadColumnE;
 	/** Equivalent vector of host_structures_t::h_blockResult */
 	int4* d_blockResult;
-	/** CUDA vector storing the H components of the vertical bus */
+	/** HIP vector storing the H components of the vertical bus */
 	int4* d_busV_h;
-	/** CUDA vector storing the E components of the vertical bus */
+	/** HIP vector storing the E components of the vertical bus */
 	int4* d_busV_e;
-	/** CUDA vector storing other components of the vertical bus */
+	/** HIP vector storing other components of the vertical bus */
 	int3* d_busV_o;
 	/** Size allocated for the d_busH vector */
 	int busH_size;
-} cuda_structures_t;
+} hip_structures_t;
 
 
 
-/** @brief IAligner implementation for the MASA-CUDAlign extension.
+/** @brief IAligner implementation for the MASA-ROCm extension.
  *
- * This class is the Aligner implementation of the MASA-CUDAlign extension.
+ * This class is the Aligner implementation of the MASA-ROCm extension.
  * It extends from the AbstractAligner class.
  *
  * @see The AbstractAligner and IAligner to understand the
@@ -236,8 +236,8 @@ protected:
 private:
 	/** Stores the host allocated memory */
 	host_structures_t host;
-	/** Stores the cuda allocated memory */
-	cuda_structures_t cuda;
+	/** Stores the hip allocated memory */
+	hip_structures_t hip;
 
 	/** Number of multiprocessor of the selected GPU */
 	int multiprocessors;
@@ -275,7 +275,7 @@ private:
 
 
 /*
- * The following methods are wrappers for the CUDAligner.cu source file.
+ * The following methods are wrappers for the HIPAligner.hip source file.
  */
 
 void lauch_external_diagonals(
@@ -283,7 +283,7 @@ void lauch_external_diagonals(
 		int RECURRENCE_TYPE, int CHECK_LOCATION,
 		const int blocks, const int threads,
 		const int i0, const int i1,
-		const int step, const int2 cutBlock, cuda_structures_t* cuda);
+		const int step, const int2 cutBlock, hip_structures_t* hip);
 
 void bind_textures(const unsigned char* seq0, const int seq0_len,
 		const unsigned char* seq1, const int seq1_len);

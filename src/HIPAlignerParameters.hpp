@@ -19,9 +19,7 @@
  *
  ******************************************************************************/
 
-#ifndef CUDALIGNERPARAMETERS_HPP_
-#define CUDALIGNERPARAMETERS_HPP_
-
+#pragma once
 #include "libmasa/libmasa.hpp"
 
 
@@ -31,7 +29,7 @@
 #define DETECT_FASTEST_GPU (-1)
 
 /**
- * Parameters for the MASA-CUDA extension.
+ * Parameters for the MASA-ROCm extension.
  */
 class HIPAlignerParameters : public AbstractAlignerParameters {
 private:
@@ -55,4 +53,3 @@ public:
 
 };
 
-#endif /* CUDALIGNERPARAMETERS_HPP_ */

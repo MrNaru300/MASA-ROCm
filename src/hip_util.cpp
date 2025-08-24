@@ -18,7 +18,7 @@
  * along with MASA-CUDAlign.  If not, see <http://www.gnu.org/licenses/>.
  *
  ******************************************************************************/
-#define __HIP_PLATFORM_AMD__ 1
+#define __HIP_PLATFORM_AMD__
 
 #include <hip/hip_runtime.h>
 
@@ -149,10 +149,10 @@ void printGPUDevices(FILE* file) {
     int count;
     hipError_t err = hipGetDeviceCount(&count);
     if (err == hipErrorInsufficientDriver) {
-        fprintf(file, "NVIDIA HIP driver is older than the HIP runtime library\n");
+        fprintf(file, "ROCm driver is older than the ROCm runtime library\n");
     } else if (err == hipErrorNoDevice) {
 		fprintf(file, "Available GPUs: %d\n", 0);
-    	fprintf(file, "no HIP-capable devices were detected.\n");
+    	fprintf(file, "no ROCm-capable devices were detected.\n");
     } else {
 		hipDeviceProp_t devProp;
 		fprintf(file, "Detected GPUs: %d\n", count);
@@ -160,7 +160,12 @@ void printGPUDevices(FILE* file) {
 		fprintf(file, "---------------------------\n");
 		int id=0;
 		for (int deviceId=0; deviceId<count; deviceId++) {
-			hipGetDeviceProperties(&devProp, deviceId);
+			err = hipGetDeviceProperties(&devProp, deviceId);
+			if (err != hipSuccess) {
+				fprintf(file, "Failed to get device properties for device %d\n", deviceId);
+				continue;
+			}
+
 			bool compatible = (getCompiledCapability() <= (devProp.major*100+devProp.minor*10));
 			bool timeout = devProp.kernelExecTimeoutEnabled;
 			if (compatible) {
@@ -191,13 +196,13 @@ void printGPUDevices(FILE* file) {
  */
 int getGPUWeights(int* proportion, int n) {
 	/*
-	 * When any HIP runtime function is called, the HIP context is initialized.
+	 * When any ROCm runtime function is called, the HIP context is initialized.
 	 * If we call a fork after this initialization, the same context is shared
 	 * among the processes, what causes initialization errors and abnormal
 	 * execution. The getGPUWeights function are called before the fork procedure.
 	 * in the libmasa_entry_point, so, we must obtain all the GPU weights/proportion
 	 * using another process. This method fork a process only to obtain these
-	 * CUDA dependent values and the child process dies with its own CUDA context.
+	 * HIP dependent values and the child process dies with its own HIP context.
 	 * This context is not shared with the parent process, so we can continue
 	 * the Aligner execution without any problem.
 	 */
@@ -282,7 +287,7 @@ int getAvailableGPU(int* ids, int n) {
 }
 
 /**
- * Selects a GPU for the CUDA execution.
+ * Selects a GPU for the GPU execution.
  * @param id id of the selected GPU.
  */
 void selectGPU(int id) {

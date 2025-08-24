@@ -19,7 +19,7 @@
  *
  ******************************************************************************/
 
-#define __HIP_PLATFORM_AMD__ 1
+#define __HIP_PLATFORM_AMD__
 
 #include "HIPAlignerParameters.hpp"
 #include "hip_util.h"
@@ -38,7 +38,7 @@ using namespace std;
                            A list of available GPUs can be obtained with the   \n\
                            --list-gpus parameter. \n\
 --list-gpus             Lists all available GPUs. \n\
---blocks=B              Run B CUDA Blocks\n\
+--blocks=B              Run B GPU Blocks\n\
 "
 
 #define ARG_GPU                 0x1001
@@ -73,7 +73,7 @@ HIPAlignerParameters::~HIPAlignerParameters(){
  * See description in header file.
  */
 void HIPAlignerParameters::printUsage() const {
-	AbstractAlignerParameters::printFormattedUsage("CUDA Specific Options", USAGE);
+	AbstractAlignerParameters::printFormattedUsage("HIP Specific Options", USAGE);
 }
 
 /**

@@ -38,7 +38,7 @@
  */
 #define MAX_GPUS		(8)
 
-//TODO: Verificar se existe limitação para HIP
+//TODO: mudar para tamanho dinâmico
 /**
  * Maximum sequence size considering the 2^27 CUDA texture limit.
  */
@@ -102,6 +102,8 @@ aligner_capabilities_t HIPAligner::getCapabilities() {
 	capabilities.process_partition 			= SUPPORTED;
 	capabilities.variable_penalties 		= NOT_SUPPORTED;
 	capabilities.fork_processes				= SUPPORTED;
+
+
 
 	capabilities.maximum_seq0_len	= MAX_SEQUENCE_SIZE;
 	capabilities.maximum_seq1_len	= MAX_SEQUENCE_SIZE;
@@ -190,7 +192,7 @@ void HIPAligner::initializeDiagonals() {
 		host.h_blockResult[i].z = -INF;
 		host.h_blockResult[i].w = -INF;
 	}
-	hipUtilSafeCall(hipMemcpy(cuda.d_blockResult, host.h_blockResult, sizeof(int4)*blocks, hipMemcpyHostToDevice));
+	hipUtilSafeCall(hipMemcpy(hip.d_blockResult, host.h_blockResult, sizeof(int4)*blocks, hipMemcpyHostToDevice));
 }
 
 /**
@@ -206,7 +208,7 @@ void HIPAligner::processDiagonal(int diagonal, int windowLeft, int windowRight) 
 
 	lauch_external_diagonals(getFirstColumnInitType(), mustDispatchLastColumn(),
 			getRecurrenceType(), mustDispatchScores(),
-			getGrid()->getGridWidth(), getThreadCount(), getPartition().getI0(), getPartition().getI1(), diagonal, cutBlock, &cuda);
+			getGrid()->getGridWidth(), getThreadCount(), getPartition().getI0(), getPartition().getI1(), diagonal, cutBlock, &hip);
 }
 
 /**
@@ -251,13 +253,13 @@ void HIPAligner::setSequences(
 
 	host.h_busH = (int2* )malloc(bus_size);
 
-	cuda.d_seq0 = allocHipSeq(seq0, seq0_len, seq0_padding, '\0');
-	cuda.d_seq1 = allocHipSeq(seq1, seq1_len, seq1_padding, '\0');
-	cuda.busH_size = bus_size;
+	hip.d_seq0 = allocHipSeq(seq0, seq0_len, seq0_padding, '\0');
+	hip.d_seq1 = allocHipSeq(seq1, seq1_len, seq1_padding, '\0');
+	hip.busH_size = bus_size;
 
-	bind_textures(cuda.d_seq0, seq0_len+seq0_padding, cuda.d_seq1, seq1_len+seq1_padding);
+	bind_textures(hip.d_seq0, seq0_len+seq0_padding, hip.d_seq1, seq1_len+seq1_padding);
 
-	cuda.d_busH         = (int2*)  allocHip0(bus_size);
+	hip.d_busH         = (int2*)  allocHip0(bus_size);
 
     size_t usedMemory;
 	getMemoryUsage(&usedMemory);
@@ -274,14 +276,14 @@ void HIPAligner::unsetSequences() {
 	free(host.h_busH);
 	host.h_busH = NULL;
 
-	hipUtilSafeCall(hipFree(cuda.d_seq0));
-	hipUtilSafeCall(hipFree(cuda.d_seq1));
-	cuda.d_seq0 = NULL;
-	cuda.d_seq1 = NULL;
+	hipUtilSafeCall(hipFree(hip.d_seq0));
+	hipUtilSafeCall(hipFree(hip.d_seq1));
+	hip.d_seq0 = NULL;
+	hip.d_seq1 = NULL;
 	unbind_textures();
 
-	hipUtilSafeCall(hipFree(cuda.d_busH));
-	cuda.d_busH = NULL;
+	hipUtilSafeCall(hipFree(hip.d_busH));
+	hip.d_busH = NULL;
 
 	size_t usedMemory;
 	getMemoryUsage(&usedMemory);
@@ -298,11 +300,11 @@ int HIPAligner::getBlockHeight() {
 }
 
 /**
- * Calculates the CUDA block count for a given partition width (i.e.
+ * Calculates the GPU block count for a given partition width (i.e.
  * the number of blocks in the grid width).
  *
  * @param width partition's width
- * @return number of CUDA blocks. It is always less than MAX_BLOCKS and
+ * @return number of GPU blocks. It is always less than MAX_BLOCKS and
  * than HIPAlignerParameters::blocks.
  */
 int HIPAligner::getGridWidth(const int width) {
@@ -374,15 +376,15 @@ cell_t* HIPAligner::getLastRow(int j, int len) {
 	if (j-shift < j0) {
 		int diff = j0 - (j-shift);
 		if (diff > len) diff = len;
-		if (DEBUG) printf("EXTRA x0: %d  diff: %d   xLen: %d!  mem: %p\n", j, diff, len, cuda.d_extraH);
-	    hipUtilSafeCall(hipMemcpy(host.h_busH+j, cuda.d_extraH,
+		if (DEBUG) printf("EXTRA x0: %d  diff: %d   xLen: %d!  mem: %p\n", j, diff, len, hip.d_extraH);
+	    hipUtilSafeCall(hipMemcpy(host.h_busH+j, hip.d_extraH,
 	    		(diff)*sizeof(int2), hipMemcpyDeviceToHost));
 	    if (len-diff > 0) {
-	    	hipUtilSafeCall(hipMemcpy(host.h_busH+j+diff, cuda.d_busH+j0,
+	    	hipUtilSafeCall(hipMemcpy(host.h_busH+j+diff, hip.d_busH+j0,
 	    			(len-diff)*sizeof(int2), hipMemcpyDeviceToHost));
 	    }
 	} else {
-	    hipUtilSafeCall(hipMemcpy(host.h_busH+j, cuda.d_busH+j-shift,
+	    hipUtilSafeCall(hipMemcpy(host.h_busH+j, hip.d_busH+j-shift,
 	    		(len)*sizeof(int2), hipMemcpyDeviceToHost));
 	}
 	return (cell_t*)(host.h_busH + j);
@@ -401,7 +403,7 @@ cell_t* HIPAligner::getSpecialRow(int j, int len) {
 		fprintf(stderr, "Error synchronizing stream: %s\n", hipGetErrorString(err));
 		return nullptr;
 	}
-	hipUtilSafeCall(hipMemcpy(host.h_busH + j, cuda.d_busH + j, len * sizeof(int2),
+	hipUtilSafeCall(hipMemcpy(host.h_busH + j, hip.d_busH + j, len * sizeof(int2),
 					hipMemcpyDeviceToHost));
 	
 	err = hipStreamSynchronize(0);
@@ -423,8 +425,8 @@ cell_t* HIPAligner::getLastColumn(int i, int len) {
 	// unused parameters.
 
 	int _len = THREADS_COUNT;
-	hipUtilSafeCall(hipMemcpy(host.h_flushColumnH, cuda.d_flushColumnH, _len*sizeof(int4), hipMemcpyDeviceToHost));
-	hipUtilSafeCall(hipMemcpy(host.h_flushColumnE, cuda.d_flushColumnE, _len*sizeof(int4), hipMemcpyDeviceToHost));
+	hipUtilSafeCall(hipMemcpy(host.h_flushColumnH, hip.d_flushColumnH, _len*sizeof(int4), hipMemcpyDeviceToHost));
+	hipUtilSafeCall(hipMemcpy(host.h_flushColumnE, hip.d_flushColumnE, _len*sizeof(int4), hipMemcpyDeviceToHost));
 
 	/*
 	 * We will interleave the H and E components into a vector, considering
@@ -455,7 +457,7 @@ cell_t* HIPAligner::getLastColumn(int i, int len) {
  */
 score_t* HIPAligner::getBlockScores() {
 	int blocks = getGrid()->getGridWidth();
-	hipUtilSafeCall(hipMemcpy(host.h_blockResult, cuda.d_blockResult, sizeof(int4)*blocks, hipMemcpyDeviceToHost));
+	hipUtilSafeCall(hipMemcpy(host.h_blockResult, hip.d_blockResult, sizeof(int4)*blocks, hipMemcpyDeviceToHost));
 	for (int k=0; k<blocks; k++) {
 		host.h_blockScores[k].i = host.h_blockResult[k].y;
 		host.h_blockScores[k].j = host.h_blockResult[k].x;
@@ -475,7 +477,7 @@ score_t* HIPAligner::getBlockScores() {
  */
 void HIPAligner::setFirstRow(const cell_t* cells, int j, int len) {
 	if (DEBUG) fprintf(stderr, "HIPAligner::setFirstRow(..., %d, %d)\n", j, len);
-	hipUtilSafeCall(hipMemcpy(cuda.d_busH + j, cells,
+	hipUtilSafeCall(hipMemcpy(hip.d_busH + j, cells,
 			len*sizeof(int2), hipMemcpyHostToDevice));
 }
 
@@ -512,9 +514,9 @@ void HIPAligner::setFirstColumn(const cell_t* cells, int i, int len) {
 		host.h_loadColumnE[k].z = cells[k * ALPHA - 1].e;
 		host.h_loadColumnE[k].w = cells[k * ALPHA - 0].e;
 	}
-	hipUtilSafeCall(hipMemcpy(cuda.d_loadColumnH, host.h_loadColumnH,
+	hipUtilSafeCall(hipMemcpy(hip.d_loadColumnH, host.h_loadColumnH,
 					(getBlockHeight() + 4) * sizeof(int), hipMemcpyHostToDevice));
-	hipUtilSafeCall(hipMemcpy(cuda.d_loadColumnE, host.h_loadColumnE,
+	hipUtilSafeCall(hipMemcpy(hip.d_loadColumnE, host.h_loadColumnE,
 					(getBlockHeight() + 4) * sizeof(int), hipMemcpyHostToDevice));
 }
 
@@ -528,7 +530,7 @@ void HIPAligner::clearPrunedBlocks(int b0, int b1) {
 	int p1;
 	getGrid()->getBlockPosition(b0, 0, NULL, &p0, NULL, NULL);
 	getGrid()->getBlockPosition(b1, 0, NULL, &p1, NULL, NULL);
-	initializeBusHInfinity(p0, p1, cuda.d_busH);
+	initializeBusHInfinity(p0, p1, hip.d_busH);
 }
 
 
@@ -636,18 +638,18 @@ void HIPAligner::allocateGlobalStructures() {
 	host.h_blockScores     = (score_t*)malloc(MAX_BLOCKS_COUNT*sizeof(score_t));
 	host.h_busH            = NULL;
 
-	cuda.d_extraH       = (int2*) allocHip0(THREADS_COUNT*sizeof(int2));
-	cuda.d_flushColumnH = (int4*) allocHip0(THREADS_COUNT*sizeof(int4));
-	cuda.d_flushColumnE = (int4*) allocHip0(THREADS_COUNT*sizeof(int4));
-	cuda.d_loadColumnH  = (int4*) allocHip0((THREADS_COUNT+1)*sizeof(int4));
-	cuda.d_loadColumnE  = (int4*) allocHip0((THREADS_COUNT+1)*sizeof(int4));
-	cuda.d_blockResult  = (int4*) allocHip0(MAX_BLOCKS_COUNT*sizeof(int4));
-	cuda.d_busV_h       = (int4*) allocHip0(MAX_GRID_HEIGHT*sizeof(int4));
-	cuda.d_busV_e       = (int4*) allocHip0(MAX_GRID_HEIGHT*sizeof(int4));
-	cuda.d_busV_o       = (int3*) allocHip0(MAX_GRID_HEIGHT*sizeof(int3));
-	cuda.d_seq0         = NULL;
-	cuda.d_seq1         = NULL;
-	cuda.d_busH         = NULL;
+	hip.d_extraH       = (int2*) allocHip0(THREADS_COUNT*sizeof(int2));
+	hip.d_flushColumnH = (int4*) allocHip0(THREADS_COUNT*sizeof(int4));
+	hip.d_flushColumnE = (int4*) allocHip0(THREADS_COUNT*sizeof(int4));
+	hip.d_loadColumnH  = (int4*) allocHip0((THREADS_COUNT+1)*sizeof(int4));
+	hip.d_loadColumnE  = (int4*) allocHip0((THREADS_COUNT+1)*sizeof(int4));
+	hip.d_blockResult  = (int4*) allocHip0(MAX_BLOCKS_COUNT*sizeof(int4));
+	hip.d_busV_h       = (int4*) allocHip0(MAX_GRID_HEIGHT*sizeof(int4));
+	hip.d_busV_e       = (int4*) allocHip0(MAX_GRID_HEIGHT*sizeof(int4));
+	hip.d_busV_o       = (int3*) allocHip0(MAX_GRID_HEIGHT*sizeof(int3));
+	hip.d_seq0         = NULL;
+	hip.d_seq1         = NULL;
+	hip.d_busH         = NULL;
 
     size_t usedMemory;
 	getMemoryUsage(&usedMemory);
@@ -669,15 +671,15 @@ void HIPAligner::freeGlobalStructures() {
 	free(host.h_blockResult);
 	free(host.h_blockScores);
 
-	hipUtilSafeCall(hipFree(cuda.d_extraH));
-	hipUtilSafeCall(hipFree(cuda.d_flushColumnH));
-	hipUtilSafeCall(hipFree(cuda.d_flushColumnE));
-	hipUtilSafeCall(hipFree(cuda.d_loadColumnH));
-	hipUtilSafeCall(hipFree(cuda.d_loadColumnE));
-	hipUtilSafeCall(hipFree(cuda.d_blockResult));
-	hipUtilSafeCall(hipFree(cuda.d_busV_h));
-	hipUtilSafeCall(hipFree(cuda.d_busV_e));
-	hipUtilSafeCall(hipFree(cuda.d_busV_o));
+	hipUtilSafeCall(hipFree(hip.d_extraH));
+	hipUtilSafeCall(hipFree(hip.d_flushColumnH));
+	hipUtilSafeCall(hipFree(hip.d_flushColumnE));
+	hipUtilSafeCall(hipFree(hip.d_loadColumnH));
+	hipUtilSafeCall(hipFree(hip.d_loadColumnE));
+	hipUtilSafeCall(hipFree(hip.d_blockResult));
+	hipUtilSafeCall(hipFree(hip.d_busV_h));
+	hipUtilSafeCall(hipFree(hip.d_busV_e));
+	hipUtilSafeCall(hipFree(hip.d_busV_o));
 
     size_t usedMemory;
 	getMemoryUsage(&usedMemory);

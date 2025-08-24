@@ -2,20 +2,20 @@
  *
  * Copyright (c) 2010-2015   Edans Sandes
  *
- * This file is part of MASA-CUDAlign.
+ * This file is part of MASA-hiplign.
  * 
- * MASA-CUDAlign is free software: you can redistribute it and/or modify
+ * MASA-hiplign is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  * 
- * MASA-CUDAlign is distributed in the hope that it will be useful,
+ * MASA-hiplign is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  * 
  * You should have received a copy of the GNU General Public License
- * along with MASA-CUDAlign.  If not, see <http://www.gnu.org/licenses/>.
+ * along with MASA-hiplign.  If not, see <http://www.gnu.org/licenses/>.
  *
  ******************************************************************************/
 
@@ -28,11 +28,11 @@
 
 //TODO: Change the comments
 /**
- * @file CUDAligner.cu
- * @brief CUDAligner related kernels and wrappers.
+ * @file hipligner.cu
+ * @brief hipligner related kernels and wrappers.
  *
  * This file contains all the kernels and some wrappers for the
- * CUDAligner class. Ensure that all CUDAligner.* files are compiled
+ * hipligner class. Ensure that all hipligner.* files are compiled
  * with the same number of threads.
  *
  * The function templates accelerate the computation using precompiled
@@ -1221,10 +1221,10 @@ void initializeBusHInfinity(const int p0, const int p1, int2* d_busH) {
 	kernel_initialize_busH_ungapped<-INF,-INF><<<threads, blocks>>>(d_busH, p0, p1-p0);
 	hipUtilCheckMsg("Kernel execution failed");
 }
-//void CUDAligner::initializeBusHUngapped(const int p0, const int p1) {
+//void hipligner::initializeBusHUngapped(const int p0, const int p1) {
 //	dim3 threads(512, 1, 1);
 //	dim3 blocks(BLOCKS_COUNT, 1, 1);
-//	kernel_initialize_busH_ungapped<0,-INF><<<threads, blocks>>>(cuda.d_busH, p0, p1-p0);
+//	kernel_initialize_busH_ungapped<0,-INF><<<threads, blocks>>>(hip.d_busH, p0, p1-p0);
 //	hipUtilCheckMsg("Kernel execution failed");
 //}
 
@@ -1257,21 +1257,21 @@ void initializeBusHInfinity(const int p0, const int p1, int2* d_busH) {
  * @param i1 last column id.
  * @param step the current external diagonal id, starting from 0.
  * @param cutBlock pruning window.
- * @param cuda the object containing all the cuda allocated structures.
+ * @param hip the object containing all the hip allocated structures.
  */
 template <int COLUMN_SOURCE, int COLUMN_DESTINATION, int RECURRENCE_TYPE, int CHECK_LOCATION>
 void lauch_external_diagonals(const int blocks, const int threads,
 		const int i0, const int i1,
-		const int step, const int2 cutBlock, cuda_structures_t* cuda) {
-	hipUtilSafeCall(hipBindTexture(0, t_busH, cuda->d_busH, cuda->busH_size));
+		const int step, const int2 cutBlock, hip_structures_t* hip) {
+	hipUtilSafeCall(hipBindTexture(0, t_busH, hip->d_busH, hip->busH_size));
 	dim3 grid( blocks, 1, 1);
 	if (blocks == 1) {
 		dim3 block( threads, 1, 1);
-		kernel_single_phase<COLUMN_SOURCE, COLUMN_DESTINATION, RECURRENCE_TYPE, CHECK_LOCATION><<< grid, block, 0>>>(i0, i1, step, cutBlock, cuda->d_blockResult, cuda->d_busH, cuda->d_extraH, cuda->d_busV_h, cuda->d_busV_e, cuda->d_busV_o, cuda->d_loadColumnH, cuda->d_loadColumnE, cuda->d_flushColumnH, cuda->d_flushColumnE);
+		kernel_single_phase<COLUMN_SOURCE, COLUMN_DESTINATION, RECURRENCE_TYPE, CHECK_LOCATION><<< grid, block, 0>>>(i0, i1, step, cutBlock, hip->d_blockResult, hip->d_busH, hip->d_extraH, hip->d_busV_h, hip->d_busV_e, hip->d_busV_o, hip->d_loadColumnH, hip->d_loadColumnE, hip->d_flushColumnH, hip->d_flushColumnE);
 	} else {
 		static dim3 block( THREADS_COUNT, 1, 1);
-		kernel_long_phase<RECURRENCE_TYPE, CHECK_LOCATION><<< grid, threads, 0>>>(i0, i1, step-1, cutBlock, cuda->d_blockResult, cuda->d_busH, cuda->d_extraH, cuda->d_busV_h, cuda->d_busV_e, cuda->d_busV_o);
-		kernel_short_phase<COLUMN_SOURCE, COLUMN_DESTINATION, RECURRENCE_TYPE, CHECK_LOCATION><<< grid, threads, 0>>>(i0, i1, step, cutBlock, cuda->d_blockResult, cuda->d_busH, cuda->d_extraH, cuda->d_busV_h, cuda->d_busV_e, cuda->d_busV_o, cuda->d_loadColumnH, cuda->d_loadColumnE, cuda->d_flushColumnH, cuda->d_flushColumnE);
+		kernel_long_phase<RECURRENCE_TYPE, CHECK_LOCATION><<< grid, threads, 0>>>(i0, i1, step-1, cutBlock, hip->d_blockResult, hip->d_busH, hip->d_extraH, hip->d_busV_h, hip->d_busV_e, hip->d_busV_o);
+		kernel_short_phase<COLUMN_SOURCE, COLUMN_DESTINATION, RECURRENCE_TYPE, CHECK_LOCATION><<< grid, threads, 0>>>(i0, i1, step, cutBlock, hip->d_blockResult, hip->d_busH, hip->d_extraH, hip->d_busV_h, hip->d_busV_e, hip->d_busV_o, hip->d_loadColumnH, hip->d_loadColumnE, hip->d_flushColumnH, hip->d_flushColumnE);
 	}
 	hipError_t err = hipStreamSynchronize(0);
 	if (err != hipSuccess) {
@@ -1285,11 +1285,11 @@ void lauch_external_diagonals(const int blocks, const int threads,
 template <int COLUMN_SOURCE, int COLUMN_DESTINATION, int RECURRENCE_TYPE>
 void lauch_external_diagonals(int CHECK_LOCATION, const int blocks, const int threads,
 		const int i0, const int i1,
-		const int step, const int2 cutBlock, cuda_structures_t* cuda) {
+		const int step, const int2 cutBlock, hip_structures_t* hip) {
 	if (CHECK_LOCATION) {
-		lauch_external_diagonals<COLUMN_SOURCE, COLUMN_DESTINATION, RECURRENCE_TYPE, CHECK_BEST_SCORE>(blocks, threads, i0, i1, step, cutBlock, cuda);
+		lauch_external_diagonals<COLUMN_SOURCE, COLUMN_DESTINATION, RECURRENCE_TYPE, CHECK_BEST_SCORE>(blocks, threads, i0, i1, step, cutBlock, hip);
 	} else {
-		lauch_external_diagonals<COLUMN_SOURCE, COLUMN_DESTINATION, RECURRENCE_TYPE, IGNORE_BEST_SCORE>(blocks, threads, i0, i1, step, cutBlock, cuda);
+		lauch_external_diagonals<COLUMN_SOURCE, COLUMN_DESTINATION, RECURRENCE_TYPE, IGNORE_BEST_SCORE>(blocks, threads, i0, i1, step, cutBlock, hip);
 	}
 }
 
@@ -1297,11 +1297,11 @@ void lauch_external_diagonals(int CHECK_LOCATION, const int blocks, const int th
 template <int COLUMN_SOURCE, int COLUMN_DESTINATION>
 void lauch_external_diagonals(int RECURRENCE_TYPE, int CHECK_LOCATION, const int blocks, const int threads,
 		const int i0, const int i1,
-		const int step, const int2 cutBlock, cuda_structures_t* cuda) {
+		const int step, const int2 cutBlock, hip_structures_t* hip) {
 	if (RECURRENCE_TYPE == SMITH_WATERMAN) {
-		lauch_external_diagonals<COLUMN_SOURCE, COLUMN_DESTINATION, SMITH_WATERMAN>(CHECK_LOCATION, blocks, threads, i0, i1, step, cutBlock, cuda);
+		lauch_external_diagonals<COLUMN_SOURCE, COLUMN_DESTINATION, SMITH_WATERMAN>(CHECK_LOCATION, blocks, threads, i0, i1, step, cutBlock, hip);
 	} else if (RECURRENCE_TYPE == NEEDLEMAN_WUNSCH) {
-		lauch_external_diagonals<COLUMN_SOURCE, COLUMN_DESTINATION, NEEDLEMAN_WUNSCH>(CHECK_LOCATION, blocks, threads, i0, i1, step, cutBlock, cuda);
+		lauch_external_diagonals<COLUMN_SOURCE, COLUMN_DESTINATION, NEEDLEMAN_WUNSCH>(CHECK_LOCATION, blocks, threads, i0, i1, step, cutBlock, hip);
 	} else {
 		// DIE
 	}
@@ -1312,24 +1312,24 @@ void lauch_external_diagonals(int RECURRENCE_TYPE, int CHECK_LOCATION, const int
 template <int COLUMN_SOURCE>
 void lauch_external_diagonals(int COLUMN_DESTINATION, int RECURRENCE_TYPE, int CHECK_LOCATION, const int blocks, const int threads,
 		const int i0, const int i1,
-		const int step, const int2 cutBlock, cuda_structures_t* cuda) {
+		const int step, const int2 cutBlock, hip_structures_t* hip) {
 	if (COLUMN_DESTINATION) {
-		lauch_external_diagonals<COLUMN_SOURCE, STORE_LAST_COLUMN>(RECURRENCE_TYPE, CHECK_LOCATION, blocks, threads, i0, i1, step, cutBlock, cuda);
+		lauch_external_diagonals<COLUMN_SOURCE, STORE_LAST_COLUMN>(RECURRENCE_TYPE, CHECK_LOCATION, blocks, threads, i0, i1, step, cutBlock, hip);
 	} else {
-		lauch_external_diagonals<COLUMN_SOURCE, DISCARD_LAST_COLUMN>(RECURRENCE_TYPE, CHECK_LOCATION, blocks, threads, i0, i1, step, cutBlock, cuda);
+		lauch_external_diagonals<COLUMN_SOURCE, DISCARD_LAST_COLUMN>(RECURRENCE_TYPE, CHECK_LOCATION, blocks, threads, i0, i1, step, cutBlock, hip);
 	}
 }
 
 /* Templated-inline Function */
 void lauch_external_diagonals(int COLUMN_SOURCE, int COLUMN_DESTINATION, int RECURRENCE_TYPE, int CHECK_LOCATION, const int blocks, const int threads,
 		const int i0, const int i1,
-		const int step, const int2 cutBlock, cuda_structures_t* cuda) {
+		const int step, const int2 cutBlock, hip_structures_t* hip) {
 	switch (COLUMN_SOURCE) {
 		case INIT_WITH_ZEROES:
-			lauch_external_diagonals<FROM_ZEROES>(COLUMN_DESTINATION, RECURRENCE_TYPE, CHECK_LOCATION, blocks, threads, i0, i1, step, cutBlock, cuda);
+			lauch_external_diagonals<FROM_ZEROES>(COLUMN_DESTINATION, RECURRENCE_TYPE, CHECK_LOCATION, blocks, threads, i0, i1, step, cutBlock, hip);
 			break;
 		default:
-			lauch_external_diagonals<FROM_VECTOR>(COLUMN_DESTINATION, RECURRENCE_TYPE, CHECK_LOCATION, blocks, threads, i0, i1, step, cutBlock, cuda);
+			lauch_external_diagonals<FROM_VECTOR>(COLUMN_DESTINATION, RECURRENCE_TYPE, CHECK_LOCATION, blocks, threads, i0, i1, step, cutBlock, hip);
 			break;
 	}
 }

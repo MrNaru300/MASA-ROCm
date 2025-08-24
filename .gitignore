@@ -16,6 +16,9 @@ hipalign
 *.hip_o
 *.obj
 
+#Temporary files
+*.tmp
+*.temp
 
 # builds
 /build/
