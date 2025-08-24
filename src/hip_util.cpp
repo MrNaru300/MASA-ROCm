@@ -48,7 +48,7 @@ static int cutGetMaxGflopsDeviceId();
  *
  * @return the pointer to the GPU memory allocated for the sequence.
  */
-unsigned char* allocCudaSeq(const char* data, const int len, const int padding_len, const char padding_char) {
+unsigned char* allocHipSeq(const char* data, const int len, const int padding_len, const char padding_char) {
 	unsigned char* out = (unsigned char*)allocHip0(len+padding_len);
 	if (DEBUG) printf("allocHipSeq(%p, %d, %d, %d): %p\n", data, len, padding_len, padding_char, out);
 	hipUtilSafeCall( hipMemcpy(out, data, len, hipMemcpyHostToDevice));
