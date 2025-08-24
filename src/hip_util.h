@@ -22,8 +22,8 @@
 #pragma once
 
 /**
- * @file cuda_util.h
- * @brief File with basic functions and macros for CUDA calls.
+ * @file hip_util.h
+ * @brief File with basic functions and macros for HIP calls.
  */
 
 #include <stdio.h>
