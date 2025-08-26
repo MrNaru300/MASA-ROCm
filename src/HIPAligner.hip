@@ -2,20 +2,20 @@
  *
  * Copyright (c) 2010-2015   Edans Sandes
  *
- * This file is part of MASA-hiplign.
+ * This file is part of MASA-CUDAlign.
  * 
- * MASA-hiplign is free software: you can redistribute it and/or modify
+ * MASA-CUDAlign is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  * 
- * MASA-hiplign is distributed in the hope that it will be useful,
+ * MASA-CUDAlign is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  * 
  * You should have received a copy of the GNU General Public License
- * along with MASA-hiplign.  If not, see <http://www.gnu.org/licenses/>.
+ * along with MASA-CUDAlign.  If not, see <http://www.gnu.org/licenses/>.
  *
  ******************************************************************************/
 
@@ -28,11 +28,11 @@
 
 //TODO: Change the comments
 /**
- * @file hipligner.cu
- * @brief hipligner related kernels and wrappers.
+ * @file HIPAligner.hip.
+ * @brief HIPAligner related kernels and wrappers.
  *
  * This file contains all the kernels and some wrappers for the
- * hipligner class. Ensure that all hipligner.* files are compiled
+ * HIPAligner class. Ensure that all HIPAligner.* files are compiled
  * with the same number of threads.
  *
  * The function templates accelerate the computation using precompiled
@@ -1221,12 +1221,6 @@ void initializeBusHInfinity(const int p0, const int p1, int2* d_busH) {
 	kernel_initialize_busH_ungapped<-INF,-INF><<<threads, blocks>>>(d_busH, p0, p1-p0);
 	hipUtilCheckMsg("Kernel execution failed");
 }
-//void hipligner::initializeBusHUngapped(const int p0, const int p1) {
-//	dim3 threads(512, 1, 1);
-//	dim3 blocks(BLOCKS_COUNT, 1, 1);
-//	kernel_initialize_busH_ungapped<0,-INF><<<threads, blocks>>>(hip.d_busH, p0, p1-p0);
-//	hipUtilCheckMsg("Kernel execution failed");
-//}
 
 /****************************************************************************
  *

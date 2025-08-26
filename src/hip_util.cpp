@@ -22,7 +22,7 @@
 
 #include <hip/hip_runtime.h>
 
-#define DEBUG (1)
+//#define DEBUG
 
 #include "hip_util.h"
 
@@ -50,7 +50,9 @@ static int cutGetMaxGflopsDeviceId();
  */
 unsigned char* allocHipSeq(const char* data, const int len, const int padding_len, const char padding_char) {
 	unsigned char* out = (unsigned char*)allocHip0(len+padding_len);
-	if (DEBUG) printf("allocHipSeq(%p, %d, %d, %d): %p\n", data, len, padding_len, padding_char, out);
+	#ifdef DEBUG
+		printf("allocHipSeq(%p, %d, %d, %d): %p\n", data, len, padding_len, padding_char, out);
+	#endif
 	hipUtilSafeCall( hipMemcpy(out, data, len, hipMemcpyHostToDevice));
 	hipUtilSafeCall( hipMemset(out+len, padding_char, padding_len) );
     return out;
@@ -66,7 +68,9 @@ void* allocHip0(int size) {
     void* out;
     hipUtilSafeCall( hipMalloc((void**) &out, size));
     hipUtilSafeCall( hipMemset(out, 0, size));
-	if (DEBUG) printf("allocHip(%d): %p\n", size, out);
+	#ifdef DEBUG
+		printf("allocHip(%d): %p\n", size, out);
+	#endif
     return out;
 }
 

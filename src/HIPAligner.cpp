@@ -28,10 +28,10 @@
 
 
 /**
- * Set to (1) in order to print debug information in the stdout. This
+ * Uncomment in order to print debug information in the stdout. This
  * significantly degrades the performance.
  */
-#define DEBUG (0)
+//#define DEBUG
 
 /**
  * Defines the maximum number of forks for multigpu processes
@@ -147,7 +147,9 @@ void HIPAligner::initialize() {
 			gpuID = gpuID % gpus;
 			fprintf(stderr, "INFO: Wrapping gpu ID (%d -> %d). (max.: %d).\n", this->params->getForkId(), gpuID, gpus);
 		}
-		fprintf(stderr, "DEBUG: %d -> %d.\n", this->params->getForkId(), ids[gpuID]);
+		#ifdef DEBUG
+			fprintf(stderr, "DEBUG: %d -> %d.\n", this->params->getForkId(), ids[gpuID]);
+		#endif
 		this->params->setGPU(ids[gpuID]);
 	}
 	selectGPU(this->params->getGPU());
@@ -231,7 +233,10 @@ void HIPAligner::finalizeDiagonals() {
  */
 void HIPAligner::setSequences(
 		const char* seq0, const char* seq1, int seq0_len, int seq1_len) {
-	if (DEBUG) printf("HIPAligner::allocateStructures(%d,%d)\n", seq0_len, seq1_len);
+	#ifdef DEBUG
+			printf("HIPAligner::allocateStructures(%d,%d)\n", seq0_len, seq1_len);
+	#endif
+
 	if (seq0_len == 0 || seq1_len == 0) {
 		// TODO ensure in the AlignerManager that the onSequenceChange will
 		// only be executed if the sequences are not zero-length
@@ -271,7 +276,9 @@ void HIPAligner::setSequences(
  * Dispose all structures related to the sequence sizes.
  */
 void HIPAligner::unsetSequences() {
-	if (DEBUG) printf("HIPAligner::freeStructures()\n");
+	#ifdef DEBUG
+		printf("HIPAligner::freeStructures()\n");
+	#endif
 
 	free(host.h_busH);
 	host.h_busH = NULL;
@@ -341,11 +348,12 @@ int HIPAligner::getGridWidth(const int width) {
 			}
 		}
 	}
-	if (DEBUG) {
+	#ifdef DEBUG
 		printf("SIZES partition.width: %d  block.size: (%d,4x%d) B: %d %s\n",
 				width, width / blocks, THREADS_COUNT, blocks,
 				blocks == 1 ? "[ SMALL ]" : "");
-	}
+	#endif
+
 	return blocks;
 }
 
@@ -376,7 +384,9 @@ cell_t* HIPAligner::getLastRow(int j, int len) {
 	if (j-shift < j0) {
 		int diff = j0 - (j-shift);
 		if (diff > len) diff = len;
-		if (DEBUG) printf("EXTRA x0: %d  diff: %d   xLen: %d!  mem: %p\n", j, diff, len, hip.d_extraH);
+		#ifdef DEBUG
+			printf("EXTRA x0: %d  diff: %d   xLen: %d!  mem: %p\n", j, diff, len, hip.d_extraH);
+		#endif
 	    hipUtilSafeCall(hipMemcpy(host.h_busH+j, hip.d_extraH,
 	    		(diff)*sizeof(int2), hipMemcpyDeviceToHost));
 	    if (len-diff > 0) {
@@ -476,7 +486,9 @@ score_t* HIPAligner::getBlockScores() {
  * @param len length of the vector.
  */
 void HIPAligner::setFirstRow(const cell_t* cells, int j, int len) {
-	if (DEBUG) fprintf(stderr, "HIPAligner::setFirstRow(..., %d, %d)\n", j, len);
+	#ifdef DEBUG
+		fprintf(stderr, "HIPAligner::setFirstRow(..., %d, %d)\n", j, len);
+	#endif
 	hipUtilSafeCall(hipMemcpy(hip.d_busH + j, cells,
 			len*sizeof(int2), hipMemcpyHostToDevice));
 }
@@ -661,7 +673,9 @@ void HIPAligner::allocateGlobalStructures() {
  * Deallocates the fixed structures.
  */
 void HIPAligner::freeGlobalStructures() {
-	if (DEBUG) printf("freeFixedSizeStructures()\n");
+	#ifdef DEBUG
+		printf("freeFixedSizeStructures()\n");
+	#endif
 	free(host.h_extraH);
 	free(host.h_flushColumnH);
 	free(host.h_flushColumnE);

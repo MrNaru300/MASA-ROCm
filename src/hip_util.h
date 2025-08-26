@@ -31,6 +31,8 @@
 
 #include <hip/hip_runtime.h>
 
+//#define DEBUG
+
 #define hipUtilSafeCall(err)           __hipSafeCall      (err, __FILE__, __LINE__)
 inline void __hipSafeCall( hipError_t err, const char *file, const int line )
 {
@@ -50,7 +52,7 @@ inline void __hipCheckMsg( const char *errorMessage, const char *file, const int
                 file, line, errorMessage, hipGetErrorString( err) );
         exit(-1);
     }
-#ifdef _DEBUG
+#ifdef DEBUG
     err = hipDeviceSynchronize();
     if( hipSuccess != err) {
         fprintf(stderr, "%s(%i) : hipCheckMsg hipDeviceSynchronize error: %s : %s.\n",
