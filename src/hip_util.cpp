@@ -18,13 +18,12 @@
  * along with MASA-CUDAlign.  If not, see <http://www.gnu.org/licenses/>.
  *
  ******************************************************************************/
-#define __HIP_PLATFORM_AMD__
 
-#include <hip/hip_runtime.h>
 
 //#define DEBUG
 
 #include "hip_util.h"
+#include <hip/hip_runtime.h>
 
 #include <stdio.h>
 #include <string.h>

@@ -21,6 +21,8 @@
 
 #pragma once
 
+#define __HIP_PLATFORM_AMD__
+
 /**
  * @file hip_util.h
  * @brief File with basic functions and macros for HIP calls.
@@ -29,7 +31,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <hip/hip_runtime.h>
+#ifdef __HIP_PLATFORM_NVIDIA__
+    #include <cuda_runtime.h>
+    #include "nvidia_hip_runtime_api.h"
+#elif defined(__HIP_PLATFORM_AMD__)
+    #include <hip/hip_runtime.h>
+#endif
 
 //#define DEBUG
 

@@ -19,7 +19,6 @@
  *
  ******************************************************************************/
 
-#define __HIP_PLATFORM_AMD__
 
 #include "HIPAlignerParameters.hpp"
 #include "hip_util.h"
