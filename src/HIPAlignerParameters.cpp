@@ -19,10 +19,11 @@
  *
  ******************************************************************************/
 
-#include "CUDAlignerParameters.hpp"
-#include "cuda_util.h"
 
-#include "CUDAligner.hpp"
+#include "HIPAlignerParameters.hpp"
+#include "hip_util.h"
+
+#include "HIPAligner.hpp"
 
 #include <stdio.h>
 #include <getopt.h>
@@ -36,7 +37,7 @@ using namespace std;
                            A list of available GPUs can be obtained with the   \n\
                            --list-gpus parameter. \n\
 --list-gpus             Lists all available GPUs. \n\
---blocks=B              Run B CUDA Blocks\n\
+--blocks=B              Run B GPU Blocks\n\
 "
 
 #define ARG_GPU                 0x1001
@@ -54,31 +55,31 @@ static struct option long_options[] = {
     };
 
 /**
- * CUDAlignerParameters constructor.
+ * HIPAlignerParameters constructor.
  */
-CUDAlignerParameters::CUDAlignerParameters() {
+HIPAlignerParameters::HIPAlignerParameters() {
 	blocks = 0;
 	gpu = DETECT_FASTEST_GPU;
 }
 
 /**
- * CUDAlignerParameters destructor.
+ * HIPAlignerParameters destructor.
  */
-CUDAlignerParameters::~CUDAlignerParameters(){
+HIPAlignerParameters::~HIPAlignerParameters(){
 }
 
 /*
  * See description in header file.
  */
-void CUDAlignerParameters::printUsage() const {
-	AbstractAlignerParameters::printFormattedUsage("CUDA Specific Options", USAGE);
+void HIPAlignerParameters::printUsage() const {
+	AbstractAlignerParameters::printFormattedUsage("HIP Specific Options", USAGE);
 }
 
 /**
- * Processes the argument for the CUDAlignerParameters;
+ * Processes the argument for the HIPAlignerParameters;
  * @copydoc AbstractAlignerParameters::processArgument
  */
-int CUDAlignerParameters::processArgument(int argc, char** argv) {
+int HIPAlignerParameters::processArgument(int argc, char** argv) {
 	int ret = AbstractAlignerParameters::callGetOpt(argc, argv, long_options);
 	switch ( ret ) {
 		case ARG_GPU:
@@ -110,19 +111,19 @@ int CUDAlignerParameters::processArgument(int argc, char** argv) {
 }
 
 
-int CUDAlignerParameters::getBlocks() const {
+int HIPAlignerParameters::getBlocks() const {
 	return blocks;
 }
 
-void CUDAlignerParameters::setBlocks(int blocks) {
+void HIPAlignerParameters::setBlocks(int blocks) {
 	this->blocks = blocks;
 }
 
-int CUDAlignerParameters::getGPU() const {
+int HIPAlignerParameters::getGPU() const {
 	return gpu;
 }
 
-void CUDAlignerParameters::setGPU(int gpu) {
+void HIPAlignerParameters::setGPU(int gpu) {
 	this->gpu = gpu;
 }
 

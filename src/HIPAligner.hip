@@ -19,19 +19,20 @@
  *
  ******************************************************************************/
 
-#include "CUDAligner.hpp"
-#include "cuda_util.h"
+#include "HIPAligner.hpp"
+#include "hip_util.h"
 #include "config.h"
 
 #include <stdio.h>
 #include <getopt.h>
 
+//TODO: Change the comments
 /**
- * @file CUDAligner.cu
- * @brief CUDAligner related kernels and wrappers.
+ * @file HIPAligner.hip.
+ * @brief HIPAligner related kernels and wrappers.
  *
  * This file contains all the kernels and some wrappers for the
- * CUDAligner class. Ensure that all CUDAligner.* files are compiled
+ * HIPAligner class. Ensure that all HIPAligner.* files are compiled
  * with the same number of threads.
  *
  * The function templates accelerate the computation using precompiled
@@ -71,12 +72,12 @@
 /**
  * Texture definition for the DNA of sequence#0 (vertical in the DP matrix).
  */
-texture<unsigned char, 1, cudaReadModeElementType> t_seq0;
+texture<unsigned char, 1, hipReadModeElementType> t_seq0;
 
 /**
  * Texture definition for the DNA of sequence#1 (horizontal in the DP matrix).
  */
-texture<unsigned char, 1, cudaReadModeElementType> t_seq1;
+texture<unsigned char, 1, hipReadModeElementType> t_seq1;
 
 
 /**
@@ -91,7 +92,7 @@ texture<unsigned char, 1, cudaReadModeElementType> t_seq1;
  * for safety. For the single phase execution (small sequences), this
  * optimization must be disabled.
  */
-texture<         int2, 1, cudaReadModeElementType> t_busH;
+texture<         int2, 1, hipReadModeElementType> t_busH;
 
 
 
@@ -1184,16 +1185,16 @@ static __global__ void kernel_initialize_busH_ungapped(int2* busH, const int j0,
  * @param seq1_len sequence 1 length
  */
 void bind_textures(const unsigned char* seq0, const int seq0_len, const unsigned char* seq1, const int seq1_len) {
-	cutilSafeCall(cudaBindTexture(0, t_seq0, seq0, seq0_len));
-	cutilSafeCall(cudaBindTexture(0, t_seq1, seq1, seq1_len));
+	hipUtilSafeCall(hipBindTexture(0, t_seq0, seq0, seq0_len));
+	hipUtilSafeCall(hipBindTexture(0, t_seq1, seq1, seq1_len));
 }
 
 /**
  * Unbind the textures for the DNA sequences.
  */
 void unbind_textures() {
-	cutilSafeCall(cudaUnbindTexture(t_seq1));
-	cutilSafeCall(cudaUnbindTexture(t_seq0));
+	hipUtilSafeCall(hipUnbindTexture(t_seq1));
+	hipUtilSafeCall(hipUnbindTexture(t_seq0));
 }
 
 /**
@@ -1205,7 +1206,7 @@ void unbind_textures() {
  * @param blocks number of blocks.
  */
 void copy_split(const int* split, const int blocks) {
-	cutilSafeCall(cudaMemcpyToSymbol(d_split, split, (blocks+1)*sizeof(int)));
+	hipUtilSafeCall(hipMemcpyToSymbol(d_split, split, (blocks+1)*sizeof(int)));
 }
 
 /**
@@ -1218,14 +1219,8 @@ void initializeBusHInfinity(const int p0, const int p1, int2* d_busH) {
 	dim3 threads(512, 1, 1);
 	dim3 blocks(MAX_BLOCKS_COUNT, 1, 1);
 	kernel_initialize_busH_ungapped<-INF,-INF><<<threads, blocks>>>(d_busH, p0, p1-p0);
-	cutilCheckMsg("Kernel execution failed");
+	hipUtilCheckMsg("Kernel execution failed");
 }
-//void CUDAligner::initializeBusHUngapped(const int p0, const int p1) {
-//	dim3 threads(512, 1, 1);
-//	dim3 blocks(BLOCKS_COUNT, 1, 1);
-//	kernel_initialize_busH_ungapped<0,-INF><<<threads, blocks>>>(cuda.d_busH, p0, p1-p0);
-//	cutilCheckMsg("Kernel execution failed");
-//}
 
 /****************************************************************************
  *
@@ -1256,25 +1251,27 @@ void initializeBusHInfinity(const int p0, const int p1, int2* d_busH) {
  * @param i1 last column id.
  * @param step the current external diagonal id, starting from 0.
  * @param cutBlock pruning window.
- * @param cuda the object containing all the cuda allocated structures.
+ * @param hip the object containing all the hip allocated structures.
  */
 template <int COLUMN_SOURCE, int COLUMN_DESTINATION, int RECURRENCE_TYPE, int CHECK_LOCATION>
 void lauch_external_diagonals(const int blocks, const int threads,
 		const int i0, const int i1,
-		const int step, const int2 cutBlock, cuda_structures_t* cuda) {
-	cutilSafeCall(cudaBindTexture(0, t_busH, cuda->d_busH, cuda->busH_size));
+		const int step, const int2 cutBlock, hip_structures_t* hip) {
+	hipUtilSafeCall(hipBindTexture(0, t_busH, hip->d_busH, hip->busH_size));
 	dim3 grid( blocks, 1, 1);
 	if (blocks == 1) {
 		dim3 block( threads, 1, 1);
-		kernel_single_phase<COLUMN_SOURCE, COLUMN_DESTINATION, RECURRENCE_TYPE, CHECK_LOCATION><<< grid, block, 0>>>(i0, i1, step, cutBlock, cuda->d_blockResult, cuda->d_busH, cuda->d_extraH, cuda->d_busV_h, cuda->d_busV_e, cuda->d_busV_o, cuda->d_loadColumnH, cuda->d_loadColumnE, cuda->d_flushColumnH, cuda->d_flushColumnE);
+		kernel_single_phase<COLUMN_SOURCE, COLUMN_DESTINATION, RECURRENCE_TYPE, CHECK_LOCATION><<< grid, block, 0>>>(i0, i1, step, cutBlock, hip->d_blockResult, hip->d_busH, hip->d_extraH, hip->d_busV_h, hip->d_busV_e, hip->d_busV_o, hip->d_loadColumnH, hip->d_loadColumnE, hip->d_flushColumnH, hip->d_flushColumnE);
 	} else {
 		static dim3 block( THREADS_COUNT, 1, 1);
-		kernel_long_phase<RECURRENCE_TYPE, CHECK_LOCATION><<< grid, threads, 0>>>(i0, i1, step-1, cutBlock, cuda->d_blockResult, cuda->d_busH, cuda->d_extraH, cuda->d_busV_h, cuda->d_busV_e, cuda->d_busV_o);
-		kernel_short_phase<COLUMN_SOURCE, COLUMN_DESTINATION, RECURRENCE_TYPE, CHECK_LOCATION><<< grid, threads, 0>>>(i0, i1, step, cutBlock, cuda->d_blockResult, cuda->d_busH, cuda->d_extraH, cuda->d_busV_h, cuda->d_busV_e, cuda->d_busV_o, cuda->d_loadColumnH, cuda->d_loadColumnE, cuda->d_flushColumnH, cuda->d_flushColumnE);
+		kernel_long_phase<RECURRENCE_TYPE, CHECK_LOCATION><<< grid, threads, 0>>>(i0, i1, step-1, cutBlock, hip->d_blockResult, hip->d_busH, hip->d_extraH, hip->d_busV_h, hip->d_busV_e, hip->d_busV_o);
+		kernel_short_phase<COLUMN_SOURCE, COLUMN_DESTINATION, RECURRENCE_TYPE, CHECK_LOCATION><<< grid, threads, 0>>>(i0, i1, step, cutBlock, hip->d_blockResult, hip->d_busH, hip->d_extraH, hip->d_busV_h, hip->d_busV_e, hip->d_busV_o, hip->d_loadColumnH, hip->d_loadColumnE, hip->d_flushColumnH, hip->d_flushColumnE);
 	}
-	cudaStreamSynchronize(0);
-	cutilCheckMsg("Kernel execution failed");
-	cutilSafeCall(cudaUnbindTexture(t_busH));
+	hipError_t err = hipStreamSynchronize(0);
+	if (err != hipSuccess) {
+		hipUtilCheckMsg("Kernel execution failed");
+	}
+	hipUtilSafeCall(hipUnbindTexture(t_busH));
 }
 
 
@@ -1282,11 +1279,11 @@ void lauch_external_diagonals(const int blocks, const int threads,
 template <int COLUMN_SOURCE, int COLUMN_DESTINATION, int RECURRENCE_TYPE>
 void lauch_external_diagonals(int CHECK_LOCATION, const int blocks, const int threads,
 		const int i0, const int i1,
-		const int step, const int2 cutBlock, cuda_structures_t* cuda) {
+		const int step, const int2 cutBlock, hip_structures_t* hip) {
 	if (CHECK_LOCATION) {
-		lauch_external_diagonals<COLUMN_SOURCE, COLUMN_DESTINATION, RECURRENCE_TYPE, CHECK_BEST_SCORE>(blocks, threads, i0, i1, step, cutBlock, cuda);
+		lauch_external_diagonals<COLUMN_SOURCE, COLUMN_DESTINATION, RECURRENCE_TYPE, CHECK_BEST_SCORE>(blocks, threads, i0, i1, step, cutBlock, hip);
 	} else {
-		lauch_external_diagonals<COLUMN_SOURCE, COLUMN_DESTINATION, RECURRENCE_TYPE, IGNORE_BEST_SCORE>(blocks, threads, i0, i1, step, cutBlock, cuda);
+		lauch_external_diagonals<COLUMN_SOURCE, COLUMN_DESTINATION, RECURRENCE_TYPE, IGNORE_BEST_SCORE>(blocks, threads, i0, i1, step, cutBlock, hip);
 	}
 }
 
@@ -1294,11 +1291,11 @@ void lauch_external_diagonals(int CHECK_LOCATION, const int blocks, const int th
 template <int COLUMN_SOURCE, int COLUMN_DESTINATION>
 void lauch_external_diagonals(int RECURRENCE_TYPE, int CHECK_LOCATION, const int blocks, const int threads,
 		const int i0, const int i1,
-		const int step, const int2 cutBlock, cuda_structures_t* cuda) {
+		const int step, const int2 cutBlock, hip_structures_t* hip) {
 	if (RECURRENCE_TYPE == SMITH_WATERMAN) {
-		lauch_external_diagonals<COLUMN_SOURCE, COLUMN_DESTINATION, SMITH_WATERMAN>(CHECK_LOCATION, blocks, threads, i0, i1, step, cutBlock, cuda);
+		lauch_external_diagonals<COLUMN_SOURCE, COLUMN_DESTINATION, SMITH_WATERMAN>(CHECK_LOCATION, blocks, threads, i0, i1, step, cutBlock, hip);
 	} else if (RECURRENCE_TYPE == NEEDLEMAN_WUNSCH) {
-		lauch_external_diagonals<COLUMN_SOURCE, COLUMN_DESTINATION, NEEDLEMAN_WUNSCH>(CHECK_LOCATION, blocks, threads, i0, i1, step, cutBlock, cuda);
+		lauch_external_diagonals<COLUMN_SOURCE, COLUMN_DESTINATION, NEEDLEMAN_WUNSCH>(CHECK_LOCATION, blocks, threads, i0, i1, step, cutBlock, hip);
 	} else {
 		// DIE
 	}
@@ -1309,24 +1306,24 @@ void lauch_external_diagonals(int RECURRENCE_TYPE, int CHECK_LOCATION, const int
 template <int COLUMN_SOURCE>
 void lauch_external_diagonals(int COLUMN_DESTINATION, int RECURRENCE_TYPE, int CHECK_LOCATION, const int blocks, const int threads,
 		const int i0, const int i1,
-		const int step, const int2 cutBlock, cuda_structures_t* cuda) {
+		const int step, const int2 cutBlock, hip_structures_t* hip) {
 	if (COLUMN_DESTINATION) {
-		lauch_external_diagonals<COLUMN_SOURCE, STORE_LAST_COLUMN>(RECURRENCE_TYPE, CHECK_LOCATION, blocks, threads, i0, i1, step, cutBlock, cuda);
+		lauch_external_diagonals<COLUMN_SOURCE, STORE_LAST_COLUMN>(RECURRENCE_TYPE, CHECK_LOCATION, blocks, threads, i0, i1, step, cutBlock, hip);
 	} else {
-		lauch_external_diagonals<COLUMN_SOURCE, DISCARD_LAST_COLUMN>(RECURRENCE_TYPE, CHECK_LOCATION, blocks, threads, i0, i1, step, cutBlock, cuda);
+		lauch_external_diagonals<COLUMN_SOURCE, DISCARD_LAST_COLUMN>(RECURRENCE_TYPE, CHECK_LOCATION, blocks, threads, i0, i1, step, cutBlock, hip);
 	}
 }
 
 /* Templated-inline Function */
 void lauch_external_diagonals(int COLUMN_SOURCE, int COLUMN_DESTINATION, int RECURRENCE_TYPE, int CHECK_LOCATION, const int blocks, const int threads,
 		const int i0, const int i1,
-		const int step, const int2 cutBlock, cuda_structures_t* cuda) {
+		const int step, const int2 cutBlock, hip_structures_t* hip) {
 	switch (COLUMN_SOURCE) {
 		case INIT_WITH_ZEROES:
-			lauch_external_diagonals<FROM_ZEROES>(COLUMN_DESTINATION, RECURRENCE_TYPE, CHECK_LOCATION, blocks, threads, i0, i1, step, cutBlock, cuda);
+			lauch_external_diagonals<FROM_ZEROES>(COLUMN_DESTINATION, RECURRENCE_TYPE, CHECK_LOCATION, blocks, threads, i0, i1, step, cutBlock, hip);
 			break;
 		default:
-			lauch_external_diagonals<FROM_VECTOR>(COLUMN_DESTINATION, RECURRENCE_TYPE, CHECK_LOCATION, blocks, threads, i0, i1, step, cutBlock, cuda);
+			lauch_external_diagonals<FROM_VECTOR>(COLUMN_DESTINATION, RECURRENCE_TYPE, CHECK_LOCATION, blocks, threads, i0, i1, step, cutBlock, hip);
 			break;
 	}
 }

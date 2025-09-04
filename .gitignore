@@ -1,3 +1,6 @@
+#executables
+hipalign
+
 #IDE
 /.idea/
 /*.iml
@@ -10,9 +13,16 @@
 *.slo
 *.lo
 *.o
+*.hip_o
 *.obj
 
+#Temporary files
+*.tmp
+*.temp
+
+# builds
 /build/
+/sequences/
 
 # Precompiled Headers
 *.gch

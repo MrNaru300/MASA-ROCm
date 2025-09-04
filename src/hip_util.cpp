@@ -18,13 +18,12 @@
  * along with MASA-CUDAlign.  If not, see <http://www.gnu.org/licenses/>.
  *
  ******************************************************************************/
-#define __HIP_PLATFORM_AMD__ 1
 
-#include <hip/hip_runtime.h>
 
-#define DEBUG (1)
+//#define DEBUG
 
 #include "hip_util.h"
+#include <hip/hip_runtime.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -35,7 +34,7 @@
 
 #include "config.h"
 
-static cudaDeviceProp getDeviceProperties(int dev=-1);
+static hipDeviceProp_t getDeviceProperties(int dev=-1);
 static int cutGetMaxGflopsDeviceId();
 
 /**
@@ -48,11 +47,13 @@ static int cutGetMaxGflopsDeviceId();
  *
  * @return the pointer to the GPU memory allocated for the sequence.
  */
-unsigned char* allocCudaSeq(const char* data, const int len, const int padding_len, const char padding_char) {
-	unsigned char* out = (unsigned char*)allocCuda0(len+padding_len);
-	if (DEBUG) printf("allocCudaSeq(%p, %d, %d, %d): %p\n", data, len, padding_len, padding_char, out);
-	cutilSafeCall( cudaMemcpy(out, data, len, cudaMemcpyHostToDevice));
-	cutilSafeCall( cudaMemset(out+len, padding_char, padding_len) );
+unsigned char* allocHipSeq(const char* data, const int len, const int padding_len, const char padding_char) {
+	unsigned char* out = (unsigned char*)allocHip0(len+padding_len);
+	#ifdef DEBUG
+		printf("allocHipSeq(%p, %d, %d, %d): %p\n", data, len, padding_len, padding_char, out);
+	#endif
+	hipUtilSafeCall( hipMemcpy(out, data, len, hipMemcpyHostToDevice));
+	hipUtilSafeCall( hipMemset(out+len, padding_char, padding_len) );
     return out;
 }
 
@@ -62,11 +63,13 @@ unsigned char* allocCudaSeq(const char* data, const int len, const int padding_l
  * @param size length of the vector to be allocated.
  * @return the pointer to the GPU allocated memory.
  */
-void* allocCuda0(int size) {
+void* allocHip0(int size) {
     void* out;
-    cutilSafeCall( cudaMalloc((void**) &out, size));
-    cutilSafeCall( cudaMemset(out, 0, size));
-	if (DEBUG) printf("allocCuda(%d): %p\n", size, out);
+    hipUtilSafeCall( hipMalloc((void**) &out, size));
+    hipUtilSafeCall( hipMemset(out, 0, size));
+	#ifdef DEBUG
+		printf("allocHip(%d): %p\n", size, out);
+	#endif
     return out;
 }
 
@@ -75,7 +78,7 @@ void* allocCuda0(int size) {
  * @return the number of multiprocessors in the selected GPU.
  */
 int getGPUMultiprocessors() {
-	cudaDeviceProp prop = getDeviceProperties();
+	hipDeviceProp_t prop = getDeviceProperties();
 	return prop.multiProcessorCount;
 }
 
@@ -84,7 +87,7 @@ int getGPUMultiprocessors() {
  * @param file the file to print out the properties.
  */
 void printDevProp(FILE* file) {
-    cudaDeviceProp devProp = getDeviceProperties();
+    hipDeviceProp_t devProp = getDeviceProperties();
 
 	fprintf(file, "Major revision number:         %d\n",  devProp.major);
 	fprintf(file, "Minor revision number:         %d\n",  devProp.minor);
@@ -115,10 +118,10 @@ void printDevProp(FILE* file) {
  * version 2.1)
  */
 int getDevCapability() {
-    cudaDeviceProp devProp;
+    hipDeviceProp_t devProp;
     int dev;
-    cudaGetDevice(&dev);
-    cutilSafeCall(cudaGetDeviceProperties(&devProp, dev));
+    hipGetDevice(&dev);
+    hipUtilSafeCall(hipGetDeviceProperties(&devProp, dev));
     return devProp.major*100+devProp.minor*10;
 }
 
@@ -130,7 +133,7 @@ int getDevCapability() {
 int getCompiledCapability() {
 	int major;
 	int minor;
-	char* str = COMPILED_CUDA_ARCH;
+	char* str = COMPILED_HIP_ARCH;
 	if (strstr(str, "sm_") == str && strlen(str) == 5) {
 		major = str[3]-'0';
 		minor = str[4]-'0';
@@ -147,20 +150,25 @@ int getCompiledCapability() {
  */
 void printGPUDevices(FILE* file) {
     int count;
-    cudaError_t err = cudaGetDeviceCount(&count);
-    if (err == cudaErrorInsufficientDriver) {
-        fprintf(file, "NVIDIA CUDA driver is older than the CUDA runtime library\n");
-    } else if (err == cudaErrorNoDevice) {
+    hipError_t err = hipGetDeviceCount(&count);
+    if (err == hipErrorInsufficientDriver) {
+        fprintf(file, "ROCm driver is older than the ROCm runtime library\n");
+    } else if (err == hipErrorNoDevice) {
 		fprintf(file, "Available GPUs: %d\n", 0);
-    	fprintf(file, "no CUDA-capable devices were detected.\n");
+    	fprintf(file, "no ROCm-capable devices were detected.\n");
     } else {
-		cudaDeviceProp devProp;
+		hipDeviceProp_t devProp;
 		fprintf(file, "Detected GPUs: %d\n", count);
 		fprintf(file, "ID: NAME (RAM)\n");
 		fprintf(file, "---------------------------\n");
 		int id=0;
 		for (int deviceId=0; deviceId<count; deviceId++) {
-			cudaGetDeviceProperties(&devProp, deviceId);
+			err = hipGetDeviceProperties(&devProp, deviceId);
+			if (err != hipSuccess) {
+				fprintf(file, "Failed to get device properties for device %d\n", deviceId);
+				continue;
+			}
+
 			bool compatible = (getCompiledCapability() <= (devProp.major*100+devProp.minor*10));
 			bool timeout = devProp.kernelExecTimeoutEnabled;
 			if (compatible) {
@@ -191,13 +199,13 @@ void printGPUDevices(FILE* file) {
  */
 int getGPUWeights(int* proportion, int n) {
 	/*
-	 * When any CUDA runtime function is called, the CUDA context is initialized.
+	 * When any ROCm runtime function is called, the HIP context is initialized.
 	 * If we call a fork after this initialization, the same context is shared
 	 * among the processes, what causes initialization errors and abnormal
 	 * execution. The getGPUWeights function are called before the fork procedure.
 	 * in the libmasa_entry_point, so, we must obtain all the GPU weights/proportion
 	 * using another process. This method fork a process only to obtain these
-	 * CUDA dependent values and the child process dies with its own CUDA context.
+	 * HIP dependent values and the child process dies with its own HIP context.
 	 * This context is not shared with the parent process, so we can continue
 	 * the Aligner execution without any problem.
 	 */
@@ -214,11 +222,11 @@ int getGPUWeights(int* proportion, int n) {
 		/* Child */
 		close(pipe_fd[0]);
 		int count;
-		cudaGetDeviceCount(&count);
+		hipGetDeviceCount(&count);
 
-		cudaDeviceProp devProp;
+		hipDeviceProp_t devProp;
 		for (int deviceId=0; deviceId<count; deviceId++) {
-			cutilSafeCall(cudaGetDeviceProperties(&devProp, deviceId));
+			hipUtilSafeCall(hipGetDeviceProperties(&devProp, deviceId));
 	        int cores;
 	        if (devProp.major <= 1) {
 	        	cores = 8;
@@ -237,7 +245,7 @@ int getGPUWeights(int* proportion, int n) {
 	        	}
 	        }
 		}
-		cudaDeviceReset();
+		hipDeviceReset();
 		close(pipe_fd[1]);
 		exit(7);
 	} else {
@@ -266,12 +274,12 @@ int getGPUWeights(int* proportion, int n) {
  */
 int getAvailableGPU(int* ids, int n) {
 	int count = 0;
-	cudaGetDeviceCount(&count);
+	hipGetDeviceCount(&count);
 
-	cudaDeviceProp devProp;
+	hipDeviceProp_t devProp;
 	int i=0;
 	for (int deviceId=0; deviceId<count; deviceId++) {
-		cutilSafeCall(cudaGetDeviceProperties(&devProp, deviceId));
+		hipUtilSafeCall(hipGetDeviceProperties(&devProp, deviceId));
         if (getCompiledCapability() <= (devProp.major*100+devProp.minor*10)) {
         	if (count < n) {
         		ids[i++] = deviceId;
@@ -282,7 +290,7 @@ int getAvailableGPU(int* ids, int n) {
 }
 
 /**
- * Selects a GPU for the CUDA execution.
+ * Selects a GPU for the GPU execution.
  * @param id id of the selected GPU.
  */
 void selectGPU(int id) {
@@ -293,8 +301,8 @@ void selectGPU(int id) {
         deviceId = id;
     }
 
-    cutilSafeCall(cudaSetDevice( deviceId ));
-    cutilCheckMsg("cudaSetDevice failed");
+    hipUtilSafeCall(hipSetDevice( deviceId ));
+    hipUtilCheckMsg("hipSetDevice failed");
 }
 
 /**
@@ -306,8 +314,8 @@ void selectGPU(int id) {
 void getMemoryUsage(size_t* usedMem, size_t* totalMem) {
 	size_t myFreeMem;
 	size_t myTotalMem;
-	cudaFree(0); // Ensures the CUDA context creation. Otherwise cuMemGetInfo (driver API) will return zero.
-	cuMemGetInfo(&myFreeMem, &myTotalMem);
+	hipFree(0); // Ensures the HIP context creation. Otherwise hipMemGetInfo (driver API) will return zero.
+	hipMemGetInfo(&myFreeMem, &myTotalMem);
 	if (usedMem != NULL) {
 		*usedMem = myTotalMem-myFreeMem;
 	}
@@ -317,35 +325,34 @@ void getMemoryUsage(size_t* usedMem, size_t* totalMem) {
 }
 
 /**
- * Returns the cudaDeviceProp structure with the properties of a given GPU.
+ * Returns the hipDeviceProp_t structure with the properties of a given GPU.
  *
  * @param dev id of the GPU to be queried.
- * @return the cudaDeviceProp structure containing the properties of the GPU.
+ * @return the hipDeviceProp_t structure containing the properties of the GPU.
  */
-cudaDeviceProp getDeviceProperties(int dev) {
-    cudaDeviceProp devProp;
+hipDeviceProp_t getDeviceProperties(int dev) {
+    hipDeviceProp_t devProp;
     if (dev == -1) {
-    	cudaGetDevice(&dev);
+    	hipGetDevice(&dev);
     }
-    cutilSafeCall(cudaGetDeviceProperties(&devProp, dev));
+    hipUtilSafeCall(hipGetDeviceProperties(&devProp, dev));
     return devProp;
 }
 
 /**
  *  This function returns the best GPU (with maximum GFLOPS).
- *  @remarks copied from cutil_inline_runtime.h - Copyright 1993-2010 NVIDIA Corporation.
  */
 int cutGetMaxGflopsDeviceId() {
 	int current_device   = 0, sm_per_multiproc = 0;
 	int max_compute_perf = 0, max_perf_device  = 0;
 	int device_count     = 0, best_SM_arch     = 0;
     int arch_cores_sm[3] = { 1, 8, 32 };
-	cudaDeviceProp deviceProp;
+	hipDeviceProp_t deviceProp;
 
-	cudaGetDeviceCount( &device_count );
+	hipGetDeviceCount( &device_count );
 	// Find the best major SM Architecture GPU device
 	while ( current_device < device_count ) {
-		cudaGetDeviceProperties( &deviceProp, current_device );
+		hipGetDeviceProperties( &deviceProp, current_device );
 		if (deviceProp.major > 0 && deviceProp.major < 9999) {
 			if (best_SM_arch < deviceProp.major) {
 				best_SM_arch = deviceProp.major;
@@ -354,10 +361,10 @@ int cutGetMaxGflopsDeviceId() {
 		current_device++;
 	}
 
-    // Find the best CUDA capable GPU device
+    // Find the best HIP capable GPU device
 	current_device = 0;
 	while( current_device < device_count ) {
-		cudaGetDeviceProperties( &deviceProp, current_device );
+		hipGetDeviceProperties( &deviceProp, current_device );
 		if (deviceProp.major == 9999 && deviceProp.minor == 9999) {
 		    sm_per_multiproc = 1;
 		} else if (deviceProp.major <= 2) {
