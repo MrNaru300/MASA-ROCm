@@ -31,12 +31,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#ifdef __HIP_PLATFORM_NVIDIA__
-    #include <cuda_runtime.h>
-    #include "nvidia_hip_runtime_api.h"
-#elif defined(__HIP_PLATFORM_AMD__)
-    #include <hip/hip_runtime.h>
-#endif
+#include <hip/hip_runtime.h>
 
 //#define DEBUG
 

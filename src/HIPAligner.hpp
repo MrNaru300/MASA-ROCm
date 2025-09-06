@@ -19,15 +19,14 @@
  *
  ******************************************************************************/
 
-#define __HIP_PLATFORM_AMD__
 
 #ifndef SMITH_WATERMAN_H_
 #define SMITH_WATERMAN_H_
 
 #include "libmasa/libmasa.hpp"
 #include "HIPAlignerParameters.hpp"
+#include "hip_util.h"
 
-#include <hip/hip_runtime.h>
 
 /*
  * The HIPAligner class is the Aligner implementation of the MASA-ROCm

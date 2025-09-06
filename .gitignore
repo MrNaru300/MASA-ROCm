@@ -73,6 +73,8 @@ hipalign
 /stamp-h?
 .deps/
 .dirstamp
+src/config.h
+src/config.h.in
 .libs/
 *.l[ao]
 *~

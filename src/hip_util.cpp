@@ -23,7 +23,6 @@
 //#define DEBUG
 
 #include "hip_util.h"
-#include <hip/hip_runtime.h>
 
 #include <stdio.h>
 #include <string.h>

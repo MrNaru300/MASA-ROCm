@@ -36,7 +36,7 @@ AC_FUNC_FORK
 AC_FUNC_MALLOC
 AC_CHECK_FUNCS([gettimeofday inet_ntoa memset mkdir pow socket strcasecmp])
 
-# HIP Options
+# HIP Options e suporte a AMD/NVIDIA
 
 OPTIMIZATION="-O3"
 
@@ -50,14 +50,34 @@ AC_ARG_ENABLE([hip-debug],
 	[HIP_DEBUG="--debug"; OPTIMIZATION=""]
 )
 
-AC_ARG_WITH([hip-arch],
-	AS_HELP_STRING([--with-hip-arch=ARCH],[select one HIP architecture, e.g. gfx900]),
-	[HIP_ARCH="$withval"],
-	[HIP_ARCH="gfx900"]
+# Plataforma HIP: AMD (ROCm) ou NVIDIA (CUDA)
+AC_ARG_WITH([hip-platform],
+	AS_HELP_STRING([--with-hip-platform=PLATFORM],[select HIP platform: amd (default) or nvidia]),
+	[HIP_PLATFORM="$withval"],
+	[HIP_PLATFORM="amd"]
 )
-HIP_ARCH_FLAGS="--amdgpu-target=$HIP_ARCH"
-AC_DEFINE_UNQUOTED([COMPILED_HIP_ARCH], ["$HIP_ARCH"], [architecture used in --amdgpu-target hipcc parameter])
 
+# Conditional para Makefile.am baseado na plataforma HIP
+AM_CONDITIONAL([HIP_PLATFORM_AMD], [test "x$HIP_PLATFORM" = "xamd"])
+
+# Arquitetura HIP
+AC_ARG_WITH([hip-arch],
+	AS_HELP_STRING([--with-hip-arch=ARCH],[select one HIP architecture, e.g. gfx900, sm_80]),
+	[HIP_ARCH="$withval"],
+	[AS_IF([test "x$HIP_PLATFORM" = "xnvidia"], [HIP_ARCH="sm_80"], [HIP_ARCH="gfx900"])]
+)
+
+AS_IF([test "x$HIP_PLATFORM" = "xnvidia"], [
+	HIP_ARCH_FLAGS="--cuda-gpu-arch=$HIP_ARCH"
+	AC_DEFINE_UNQUOTED([COMPILED_HIP_ARCH], ["$HIP_ARCH"], [CUDA architecture used in --cuda-gpu-arch hipcc parameter])
+	AC_MSG_NOTICE([Configuring for NVIDIA CUDA platform with architecture $HIP_ARCH])
+], [
+	HIP_ARCH_FLAGS="--amdgpu-target=$HIP_ARCH"
+	AC_DEFINE_UNQUOTED([COMPILED_HIP_ARCH], ["$HIP_ARCH"], [ROCm architecture used in --amdgpu-target hipcc parameter])
+	AC_MSG_NOTICE([Configuring for AMD ROCm platform with architecture $HIP_ARCH])
+])
+
+# Threads e registradores
 AC_ARG_WITH([threads],
 	AS_HELP_STRING([--with-threads=COUNT],[choose the number of HIP threads [default=128] (use power of 2)]),
 	[HIPALIGN_THREADS="-DTHREADS_COUNT=$withval"],
@@ -76,17 +96,17 @@ AC_ARG_ENABLE([32bit],
 	[ARCH="386"; HIP_LIB_DIR="lib"; PLATFORM="-m32";
 		AC_MSG_NOTICE([Enabling 32bit compilation])
 	],
-	[ARCH="x86_64"; HIP_LIB_DIR="lib"; PLATFORM="-m64";
-		AC_MSG_NOTICE([Enabling 64bit compilation])	
+	[ARCH="x86_64"; HIP_LIB_DIR="lib64"; PLATFORM="-m64";
+		AC_MSG_NOTICE([Enabling 64bit compilation])    
 	]
 )
 
 # Setup HIP paths
-# ------------------------------------------------------------------------------
 AC_ARG_WITH([hip],
-   [AS_HELP_STRING([--with-hip=PATH],[path where HIP is installed (default=/opt/rocm)])],
+   [AS_HELP_STRING([--with-hip=PATH],[path where HIP is installed (default=/opt/rocm or /usr/local/cuda)])],
    [HIP_HOME=$withval],
-   [HIP_HOME=/opt/rocm])
+   [AS_IF([test "x$HIP_PLATFORM" = "xnvidia"], [HIP_HOME=/usr/local/cuda], [HIP_HOME=/opt/rocm])]
+)
 
 AM_CONDITIONAL([COMPILE_HIP], [test "x$HIP_HOME" != "xno"])
 
@@ -96,28 +116,41 @@ AS_IF([test "x$HIP_HOME" != "xno"], [
 	HIP_LIBS="-L$HIP_HOME/$HIP_LIB_DIR"
 	HIP_LDFLAGS="-L$HIP_HOME/$HIP_LIB_DIR"
 
-	AC_CHECK_FILE($HIP_HOME/$HIP_LIB_DIR/libhiprtc.so, [],
-		[AC_MSG_ERROR([libhiprtc.so library not found in path: $HIP_HOME/$HIP_LIB_DIR. Try running 
-					  configure again with the './configure --with-hip=PATH' argument.])]
-	)
-
 	AC_ARG_WITH([hipcc],
-	   [AS_HELP_STRING([--with-hipcc=PATH],[path where hipcc is installed (e.g. /opt/rocm/bin)])],
+	   [AS_HELP_STRING([--with-hipcc=PATH],[path where hipcc is installed (e.g. /opt/rocm/bin or /usr/local/cuda/bin)])],
 	   [HIPCC_PATH=$withval],
 	   [HIPCC_PATH=$HIP_HOME/bin]
 	)
 	AC_PATH_PROG([HIPCC],[hipcc],[],[$HIPCC_PATH])
 	if test -z $HIPCC; then
-		AC_MSG_ERROR([ROCm hipcc compiler not found in path: $HIPCC_PATH. Try running 
+		AC_MSG_ERROR([HIP hipcc compiler not found in path: $HIPCC_PATH. Try running \
 					  configure again with the './configure --with-hipcc=PATH' argument.])
 	fi
 
 	save_LDFLAGS="$LDFLAGS"
 	LDFLAGS="$LDFLAGS $HIP_LDFLAGS"
 
-	AC_CHECK_LIB([hiprtc], [hiprtcCreateProgram],[],[AC_MSG_ERROR([
-					  libhiprtc.so (hiprtcCreateProgram) was not found.])]
-	)
+	AS_IF([test "x$HIP_PLATFORM" = "xnvidia"], [
+		AC_CHECK_FILE($HIP_HOME/$HIP_LIB_DIR/libcudart.so, [],
+			[AC_MSG_ERROR([libcudart.so library not found in path: $HIP_HOME/$HIP_LIB_DIR. Try running \
+						  configure again with the './configure --with-hip=PATH' argument.])]
+		)
+	], [
+		AC_CHECK_FILE($HIP_HOME/$HIP_LIB_DIR/libhiprtc.so, [],
+			[AC_MSG_ERROR([libhiprtc.so library not found in path: $HIP_HOME/$HIP_LIB_DIR. Try running \
+						  configure again with the './configure --with-hip=PATH' argument.])]
+		)
+	])
+
+	AS_IF([test "x$HIP_PLATFORM" = "xnvidia"], [
+		AC_CHECK_LIB([cudart], [cudaMalloc],[],[AC_MSG_ERROR([
+						  libcudart.so (cudaMalloc) was not found.])]
+		)
+	], [
+		AC_CHECK_LIB([hiprtc], [hiprtcCreateProgram],[],[AC_MSG_ERROR([
+						  libhiprtc.so (hiprtcCreateProgram) was not found.])]
+		)
+	])
 	LDFLAGS="$save_LDFLAGS"
 	
 	#save_CPPFLAGS="$CPPFLAGS"
@@ -125,7 +158,6 @@ AS_IF([test "x$HIP_HOME" != "xno"], [
 	#AC_CHECK_HEADERS([hip/hip_runtime.h],,
 	#	AC_MSG_ERROR([Missing required HIP header files.]))
 	#CPPFLAGS="$save_CPPFLAGS"
-
 
 	HIPCCFLAGS="$HIP_CFLAGS $HIPCCFLAGS $HIP_ARCH_FLAGS $HIP_DEBUG $HIP_REGISTERS"
 

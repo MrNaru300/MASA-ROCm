@@ -4,7 +4,13 @@ ACLOCAL_AMFLAGS = ${ACLOCAL_FLAGS}
 
 bin_PROGRAMS = hipalign
 hipalign_CXXFLAGS = $(HIP_CFLAGS) $(COMMONFLAGS) -malign-double -fno-strict-aliasing  
+
+# Conditional linking based on HIP platform (AMD ROCm or NVIDIA CUDA)
+if HIP_PLATFORM_AMD
 hipalign_LDADD = $(HIP_LIBS) $(COMMONFLAGS) ./src/HIPAligner.hip_o $(LIBMASA_PATH)/libmasa.a -lhiprtc -lamdhip64 -lpthread
+else
+hipalign_LDADD = $(HIP_LIBS) $(COMMONFLAGS) ./src/HIPAligner.hip_o $(LIBMASA_PATH)/libmasa.a -lcudart -lcuda -lpthread
+endif
 
 hipalign_SOURCES = \
 ./src/main.cpp \
