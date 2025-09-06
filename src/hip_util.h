@@ -21,8 +21,6 @@
 
 #pragma once
 
-#define __HIP_PLATFORM_AMD__
-
 /**
  * @file hip_util.h
  * @brief File with basic functions and macros for HIP calls.
@@ -33,7 +31,6 @@
 
 #include <hip/hip_runtime.h>
 
-//#define DEBUG
 
 #define hipUtilSafeCall(err)           __hipSafeCall      (err, __FILE__, __LINE__)
 inline void __hipSafeCall( hipError_t err, const char *file, const int line )

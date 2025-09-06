@@ -3,7 +3,13 @@ SUBDIRS = $(LIBMASA_PATH)
 ACLOCAL_AMFLAGS = ${ACLOCAL_FLAGS}
 
 bin_PROGRAMS = hipalign
-hipalign_CXXFLAGS = $(HIP_CFLAGS) $(COMMONFLAGS) -malign-double -fno-strict-aliasing  
+## Use hipcc para compilar unidades C++ deste alvo (garante includes do HIP)
+hipalign_CXX = $(HIPCC)
+if HIP_PLATFORM_AMD
+hipalign_CXXFLAGS = $(HIP_CFLAGS) $(COMMONFLAGS) -malign-double -fno-strict-aliasing
+else
+hipalign_CXXFLAGS = $(HIP_CFLAGS) $(COMMONFLAGS)
+endif
 
 # Conditional linking based on HIP platform (AMD ROCm or NVIDIA CUDA)
 if HIP_PLATFORM_AMD
@@ -24,7 +30,11 @@ noinst_HEADERS = \
 ./src/HIPAligner.hpp \
 ./src/HIPAlignerParameters.hpp 
 
+if HIP_PLATFORM_AMD
 HIPCCFLAGS += -fPIC -fno-strict-aliasing -ffast-math -fPIE
+else
+HIPCCFLAGS += -fPIC -x cu
+endif
 HIPCCFLAGS += $(COMMONFLAGS)
 
 clean-local:

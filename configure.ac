@@ -68,8 +68,10 @@ AC_ARG_WITH([hip-arch],
 )
 
 AS_IF([test "x$HIP_PLATFORM" = "xnvidia"], [
-	HIP_ARCH_FLAGS="--cuda-gpu-arch=$HIP_ARCH"
+	HIP_ARCH_FLAGS="-gencode arch=compute_${HIP_ARCH#sm_},code=$HIP_ARCH"
 	AC_DEFINE_UNQUOTED([COMPILED_HIP_ARCH], ["$HIP_ARCH"], [CUDA architecture used in --cuda-gpu-arch hipcc parameter])
+	AC_DEFINE([HIP_PLATFORM_NVIDIA], [1], [Define to 1 if compiling for NVIDIA platform])
+	COMMONFLAGS="-DHIP_PLATFORM_NVIDIA $COMMONFLAGS"
 	AC_MSG_NOTICE([Configuring for NVIDIA CUDA platform with architecture $HIP_ARCH])
 ], [
 	HIP_ARCH_FLAGS="--amdgpu-target=$HIP_ARCH"
@@ -112,14 +114,19 @@ AM_CONDITIONAL([COMPILE_HIP], [test "x$HIP_HOME" != "xno"])
 
 AS_IF([test "x$HIP_HOME" != "xno"], [
 
-	HIP_CFLAGS="-I$HIP_HOME/include"
+	# Para NVIDIA, os headers do HIP vêm do ROCm (/opt/rocm/include)
+	AS_IF([test "x$HIP_PLATFORM" = "xnvidia"], [
+		HIP_CFLAGS="-I/opt/rocm/include -I$HIP_HOME/include"
+	], [
+		HIP_CFLAGS="-I$HIP_HOME/include"
+	])
 	HIP_LIBS="-L$HIP_HOME/$HIP_LIB_DIR"
 	HIP_LDFLAGS="-L$HIP_HOME/$HIP_LIB_DIR"
 
 	AC_ARG_WITH([hipcc],
 	   [AS_HELP_STRING([--with-hipcc=PATH],[path where hipcc is installed (e.g. /opt/rocm/bin or /usr/local/cuda/bin)])],
 	   [HIPCC_PATH=$withval],
-	   [HIPCC_PATH=$HIP_HOME/bin]
+	   [AS_IF([test "x$HIP_PLATFORM" = "xnvidia"], [HIPCC_PATH=/opt/rocm/bin], [HIPCC_PATH=$HIP_HOME/bin])]
 	)
 	AC_PATH_PROG([HIPCC],[hipcc],[],[$HIPCC_PATH])
 	if test -z $HIPCC; then
@@ -156,7 +163,7 @@ AS_IF([test "x$HIP_HOME" != "xno"], [
 	#save_CPPFLAGS="$CPPFLAGS"
 	#CPPFLAGS="$CPPFLAGS $HIP_CFLAGS"
 	#AC_CHECK_HEADERS([hip/hip_runtime.h],,
-	#	AC_MSG_ERROR([Missing required HIP header files.]))
+	#	AC_MSG_ERROR([Missing required HIP header files. Install ROCm HIP headers (e.g., /opt/rocm/include) or use --with-hip=PATH.]))
 	#CPPFLAGS="$save_CPPFLAGS"
 
 	HIPCCFLAGS="$HIP_CFLAGS $HIPCCFLAGS $HIP_ARCH_FLAGS $HIP_DEBUG $HIP_REGISTERS"
@@ -165,6 +172,9 @@ AS_IF([test "x$HIP_HOME" != "xno"], [
 
 COMMONFLAGS="-DUNIX  $HIPALIGN_THREADS $COMMONFLAGS $PLATFORM $OPTIMIZATION -I$LIBMASA_PATH/src"
 CXXFLAGS="$DEBUG"
+AS_IF([test "x$HIP_HOME" != "xno"], [
+	CXX="$HIPCC"
+])
 
 AC_SUBST(HIP_CFLAGS)
 AC_SUBST(HIP_LIBS)
