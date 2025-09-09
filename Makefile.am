@@ -3,11 +3,10 @@ SUBDIRS = $(LIBMASA_PATH)
 ACLOCAL_AMFLAGS = ${ACLOCAL_FLAGS}
 
 bin_PROGRAMS = hipalign
-## Use hipcc para compilar unidades C++ deste alvo (garante includes do HIP)
-hipalign_CXX = $(HIPCC)
 if HIP_PLATFORM_AMD
 hipalign_CXXFLAGS = $(HIP_CFLAGS) $(COMMONFLAGS) -malign-double -fno-strict-aliasing
 else
+# Para NVIDIA, usar g++ normal e não hipcc para arquivos C++
 hipalign_CXXFLAGS = $(HIP_CFLAGS) $(COMMONFLAGS)
 endif
 
@@ -33,7 +32,8 @@ noinst_HEADERS = \
 if HIP_PLATFORM_AMD
 HIPCCFLAGS += -fPIC -fno-strict-aliasing -ffast-math -fPIE
 else
-HIPCCFLAGS += -fPIC -x cu
+# Para NVIDIA: usar nvcc através do hipcc com flags CUDA corretas
+HIPCCFLAGS += -fPIC --cuda-gpu-arch=sm_80 --cuda-path=/usr/local/cuda
 endif
 HIPCCFLAGS += $(COMMONFLAGS)
 

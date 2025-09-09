@@ -68,7 +68,7 @@ AC_ARG_WITH([hip-arch],
 )
 
 AS_IF([test "x$HIP_PLATFORM" = "xnvidia"], [
-	HIP_ARCH_FLAGS="-gencode arch=compute_${HIP_ARCH#sm_},code=$HIP_ARCH"
+	HIP_ARCH_FLAGS="--cuda-gpu-arch=$HIP_ARCH --cuda-path=/usr/local/cuda"
 	AC_DEFINE_UNQUOTED([COMPILED_HIP_ARCH], ["$HIP_ARCH"], [CUDA architecture used in --cuda-gpu-arch hipcc parameter])
 	AC_DEFINE([HIP_PLATFORM_NVIDIA], [1], [Define to 1 if compiling for NVIDIA platform])
 	COMMONFLAGS="-DHIP_PLATFORM_NVIDIA $COMMONFLAGS"
@@ -172,8 +172,13 @@ AS_IF([test "x$HIP_HOME" != "xno"], [
 
 COMMONFLAGS="-DUNIX  $HIPALIGN_THREADS $COMMONFLAGS $PLATFORM $OPTIMIZATION -I$LIBMASA_PATH/src"
 CXXFLAGS="$DEBUG"
-AS_IF([test "x$HIP_HOME" != "xno"], [
-	CXX="$HIPCC"
+# Para NVIDIA, usar g++ normal; para AMD, usar hipcc
+AS_IF([test "x$HIP_PLATFORM" = "xnvidia"], [
+	CXX="g++"
+], [
+	AS_IF([test "x$HIP_HOME" != "xno"], [
+		CXX="$HIPCC"
+	])
 ])
 
 AC_SUBST(HIP_CFLAGS)

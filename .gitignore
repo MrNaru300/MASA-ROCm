@@ -68,6 +68,7 @@ hipalign
 /install-sh
 /libtool
 /ltmain.sh
+/admin
 /m4/
 /missing
 /stamp-h?
