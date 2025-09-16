@@ -107,7 +107,7 @@ AC_ARG_ENABLE([32bit],
 	[ARCH="386"; HIP_LIB_DIR="lib"; PLATFORM="-m32";
 		AC_MSG_NOTICE([Enabling 32bit compilation])
 	],
-	[ARCH="x86_64"; HIP_LIB_DIR="lib64"; PLATFORM="-m64";
+	[ARCH="x86_64"; HIP_LIB_DIR="lib"; PLATFORM="-m64";
 		AC_MSG_NOTICE([Enabling 64bit compilation])    
 	]
 )
