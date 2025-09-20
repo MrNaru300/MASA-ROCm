@@ -36,7 +36,7 @@ AC_FUNC_FORK
 AC_FUNC_MALLOC
 AC_CHECK_FUNCS([gettimeofday inet_ntoa memset mkdir pow socket strcasecmp])
 
-# HIP Options
+# HIP Options e suporte a AMD/NVIDIA
 
 OPTIMIZATION="-O3"
 
@@ -50,14 +50,45 @@ AC_ARG_ENABLE([hip-debug],
 	[HIP_DEBUG="--debug"; OPTIMIZATION=""]
 )
 
-AC_ARG_WITH([hip-arch],
-	AS_HELP_STRING([--with-hip-arch=ARCH],[select one HIP architecture, e.g. gfx900]),
-	[HIP_ARCH="$withval"],
-	[HIP_ARCH="gfx900"]
-)
-HIP_ARCH_FLAGS="--amdgpu-target=$HIP_ARCH"
-AC_DEFINE_UNQUOTED([COMPILED_HIP_ARCH], ["$HIP_ARCH"], [architecture used in --amdgpu-target hipcc parameter])
+# Plataforma HIP: AMD or NVIDIA GPU
+AC_ARG_VAR([HIP_PLATFORM], [HIP platform: amd or nvidia gpu])
 
+if test -z "$HIP_PLATFORM"; then
+	HIP_PLATFORM="amd"
+fi
+
+case "$HIP_PLATFORM" in
+	nvidia)
+		AC_MSG_NOTICE([Building for NVIDIA platform])
+		HIP_ARCH_FLAGS=""
+		AC_DEFINE_UNQUOTED([COMPILED_HIP_ARCH], ["$HIP_ARCH"], [CUDA architecture used in --cuda-gpu-arch hipcc parameter])
+		AC_DEFINE([__HIP_PLATFORM_NVIDIA__], [1], [Define to 1 if the target platform is NVIDIA])
+		COMMONFLAGS="-DHIP_PLATFORM_NVIDIA $COMMONFLAGS"
+		;;
+	amd)
+		AC_MSG_NOTICE([Building for AMD platform])
+		AC_DEFINE_UNQUOTED([COMPILED_HIP_ARCH], ["$HIP_ARCH"], [ROCm architecture used in --amdgpu-target hipcc parameter])
+		AC_DEFINE([__HIP_PLATFORM_AMD__], [1], [Define to 1 if the target platform is AMD])
+		HIP_ARCH_FLAGS="--amdgpu-target=$HIP_ARCH"
+		;;
+	*)
+		AC_MSG_ERROR([Invalid HIP_PLATFORM: $HIP_PLATFORM. Must be amd or nvidia])
+		;;
+esac
+
+# Conditional para Makefile.am baseado na plataforma HIP
+AM_CONDITIONAL([HIP_PLATFORM_NVIDIA], [test "x$HIP_PLATFORM" = "xnvidia"])
+AM_CONDITIONAL([HIP_PLATFORM_AMD], [test "x$HIP_PLATFORM" = "xamd"])
+
+# Arquitetura HIP
+AC_ARG_WITH([hip-arch],
+	AS_HELP_STRING([--with-hip-arch=ARCH],[select one HIP architecture, e.g. gfx900, sm_80]),
+	[HIP_ARCH="$withval"],
+	[AS_IF([test "x$HIP_PLATFORM" = "xnvidia"], [HIP_ARCH="sm_80"], [HIP_ARCH="gfx900"])]
+)
+
+
+# Threads e registradores
 AC_ARG_WITH([threads],
 	AS_HELP_STRING([--with-threads=COUNT],[choose the number of HIP threads [default=128] (use power of 2)]),
 	[HIPALIGN_THREADS="-DTHREADS_COUNT=$withval"],
@@ -77,62 +108,88 @@ AC_ARG_ENABLE([32bit],
 		AC_MSG_NOTICE([Enabling 32bit compilation])
 	],
 	[ARCH="x86_64"; HIP_LIB_DIR="lib"; PLATFORM="-m64";
-		AC_MSG_NOTICE([Enabling 64bit compilation])	
+		AC_MSG_NOTICE([Enabling 64bit compilation])    
 	]
 )
 
 # Setup HIP paths
-# ------------------------------------------------------------------------------
+if test "x$HIP_PLATFORM" = "xnvidia"; then
+  HIP_HOME_DEFAULT="/usr/local/cuda"
+else
+  HIP_HOME_DEFAULT="/opt/rocm"
+fi
+
 AC_ARG_WITH([hip],
-   [AS_HELP_STRING([--with-hip=PATH],[path where HIP is installed (default=/opt/rocm)])],
-   [HIP_HOME=$withval],
-   [HIP_HOME=/opt/rocm])
+	[AS_HELP_STRING([--with-hip=PATH],[path where HIP is installed (default=$HIP_HOME_DEFAULT)])],
+	[HIP_HOME=$withval],
+	[HIP_HOME=$HIP_HOME_DEFAULT]
+)
 
 AM_CONDITIONAL([COMPILE_HIP], [test "x$HIP_HOME" != "xno"])
 
 AS_IF([test "x$HIP_HOME" != "xno"], [
-
-	HIP_CFLAGS="-I$HIP_HOME/include"
+	# Set HIP_CFLAGS based on platform
+	AS_IF([test "x$HIP_PLATFORM" = "xnvidia"], [
+		HIP_CFLAGS="-I/opt/rocm/include -I$HIP_HOME/include"
+	], [
+		HIP_CFLAGS="-I$HIP_HOME/include"
+	])
 	HIP_LIBS="-L$HIP_HOME/$HIP_LIB_DIR"
 	HIP_LDFLAGS="-L$HIP_HOME/$HIP_LIB_DIR"
 
-	AC_CHECK_FILE($HIP_HOME/$HIP_LIB_DIR/libhiprtc.so, [],
-		[AC_MSG_ERROR([libhiprtc.so library not found in path: $HIP_HOME/$HIP_LIB_DIR. Try running 
-					  configure again with the './configure --with-hip=PATH' argument.])]
-	)
-
+	# Find hipcc compiler
 	AC_ARG_WITH([hipcc],
-	   [AS_HELP_STRING([--with-hipcc=PATH],[path where hipcc is installed (e.g. /opt/rocm/bin)])],
-	   [HIPCC_PATH=$withval],
-	   [HIPCC_PATH=$HIP_HOME/bin]
+		[AS_HELP_STRING([--with-hipcc=PATH],[path where hipcc is installed (e.g. /opt/rocm/bin or /usr/local/cuda/bin)])],
+		[HIPCC_PATH=$withval],
+		[AS_IF([test "x$HIP_PLATFORM" = "xnvidia"], [HIPCC_PATH=/opt/rocm/bin], [HIPCC_PATH=$HIP_HOME/bin])]
 	)
 	AC_PATH_PROG([HIPCC],[hipcc],[],[$HIPCC_PATH])
-	if test -z $HIPCC; then
-		AC_MSG_ERROR([ROCm hipcc compiler not found in path: $HIPCC_PATH. Try running 
-					  configure again with the './configure --with-hipcc=PATH' argument.])
-	fi
+	AS_IF([test -z "$HIPCC"], [
+		AC_MSG_ERROR([HIP hipcc compiler not found in path: $HIPCC_PATH. Try running \
+						  configure again with the './configure --with-hipcc=PATH' argument.])
+	])
 
+	# Check for required libraries
 	save_LDFLAGS="$LDFLAGS"
 	LDFLAGS="$LDFLAGS $HIP_LDFLAGS"
 
-	AC_CHECK_LIB([hiprtc], [hiprtcCreateProgram],[],[AC_MSG_ERROR([
-					  libhiprtc.so (hiprtcCreateProgram) was not found.])]
-	)
+	AS_IF([test "x$HIP_PLATFORM" = "xnvidia"], [
+		AC_CHECK_FILE([$HIP_HOME/$HIP_LIB_DIR/libcudart.so], [],
+			[AC_MSG_ERROR([libcudart.so library not found in path: $HIP_HOME/$HIP_LIB_DIR. Try running \
+								configure again with the './configure --with-hip=PATH' argument.])]
+		)
+		AC_CHECK_LIB([cudart], [cudaMalloc], [],
+			[AC_MSG_ERROR([libcudart.so (cudaMalloc) was not found.])]
+		)
+	], [
+		AC_CHECK_FILE([$HIP_HOME/$HIP_LIB_DIR/libhiprtc.so], [],
+			[AC_MSG_ERROR([libhiprtc.so library not found in path: $HIP_HOME/$HIP_LIB_DIR. Try running \
+								configure again with the './configure --with-hip=PATH' argument.])]
+		)
+		AC_CHECK_LIB([hiprtc], [hiprtcCreateProgram], [],
+			[AC_MSG_ERROR([libhiprtc.so (hiprtcCreateProgram) was not found.])]
+		)
+	])
 	LDFLAGS="$save_LDFLAGS"
-	
-	#save_CPPFLAGS="$CPPFLAGS"
-	#CPPFLAGS="$CPPFLAGS $HIP_CFLAGS"
-	#AC_CHECK_HEADERS([hip/hip_runtime.h],,
-	#	AC_MSG_ERROR([Missing required HIP header files.]))
-	#CPPFLAGS="$save_CPPFLAGS"
 
+	# Check for HIP headers
+	save_CPPFLAGS="$CPPFLAGS"
+	CPPFLAGS="$CPPFLAGS $HIP_CFLAGS"
+	AC_CHECK_HEADERS([hip/hip_runtime.h], ,
+		AC_MSG_ERROR([Missing required HIP header files. Install ROCm HIP headers (e.g., /opt/rocm/include) or use --with-hip=PATH.]))
+	CPPFLAGS="$save_CPPFLAGS"
 
-	HIPCCFLAGS="$HIP_CFLAGS $HIPCCFLAGS $HIP_ARCH_FLAGS $HIP_DEBUG $HIP_REGISTERS"
-
+	# Set HIPCCFLAGS
+	HIPCCFLAGS="$HIP_CFLAGS $HIP_ARCH_FLAGS $HIP_DEBUG $HIP_REGISTERS"
 ])
 
-COMMONFLAGS="-DUNIX  $HIPALIGN_THREADS $COMMONFLAGS $PLATFORM $OPTIMIZATION -I$LIBMASA_PATH/src"
+# Common flags
+COMMONFLAGS="-DUNIX $HIPALIGN_THREADS $PLATFORM $OPTIMIZATION -I$LIBMASA_PATH/src"
 CXXFLAGS="$DEBUG"
+
+# Set CXX to HIPCC if HIP is enabled
+AS_IF([test "x$HIP_HOME" != "xno"], [CXX="$HIPCC"])
+
 
 AC_SUBST(HIP_CFLAGS)
 AC_SUBST(HIP_LIBS)

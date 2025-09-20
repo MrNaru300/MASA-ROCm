@@ -21,8 +21,6 @@
 
 #pragma once
 
-#define __HIP_PLATFORM_AMD__
-
 /**
  * @file hip_util.h
  * @brief File with basic functions and macros for HIP calls.
@@ -31,14 +29,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#ifdef __HIP_PLATFORM_NVIDIA__
-    #include <cuda_runtime.h>
-    #include "nvidia_hip_runtime_api.h"
-#elif defined(__HIP_PLATFORM_AMD__)
-    #include <hip/hip_runtime.h>
-#endif
+#include <hip/hip_runtime.h>
 
-//#define DEBUG
 
 #define hipUtilSafeCall(err)           __hipSafeCall      (err, __FILE__, __LINE__)
 inline void __hipSafeCall( hipError_t err, const char *file, const int line )

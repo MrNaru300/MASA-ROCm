@@ -3,8 +3,18 @@ SUBDIRS = $(LIBMASA_PATH)
 ACLOCAL_AMFLAGS = ${ACLOCAL_FLAGS}
 
 bin_PROGRAMS = hipalign
-hipalign_CXXFLAGS = $(HIP_CFLAGS) $(COMMONFLAGS) -malign-double -fno-strict-aliasing  
+if HIP_PLATFORM_NVIDIA
+hipalign_CXXFLAGS = $(HIP_CFLAGS) $(COMMONFLAGS)
+else
+hipalign_CXXFLAGS = $(HIP_CFLAGS) $(COMMONFLAGS) -malign-double -fno-strict-aliasing
+endif
+
+# Conditional linking based on HIP platform (AMD ROCm or NVIDIA CUDA)
+if HIP_PLATFORM_NVIDIA
+hipalign_LDADD = $(HIP_LIBS) $(COMMONFLAGS) ./src/HIPAligner.cu_o $(LIBMASA_PATH)/libmasa.a -lcudart -lcuda -lpthread
+else
 hipalign_LDADD = $(HIP_LIBS) $(COMMONFLAGS) ./src/HIPAligner.hip_o $(LIBMASA_PATH)/libmasa.a -lhiprtc -lamdhip64 -lpthread
+endif
 
 hipalign_SOURCES = \
 ./src/main.cpp \
@@ -18,16 +28,23 @@ noinst_HEADERS = \
 ./src/HIPAligner.hpp \
 ./src/HIPAlignerParameters.hpp 
 
+if HIP_PLATFORM_NVIDIA
+HIPCCFLAGS += -fPIC
+else
 HIPCCFLAGS += -fPIC -fno-strict-aliasing -ffast-math -fPIE
+endif
 HIPCCFLAGS += $(COMMONFLAGS)
 
 clean-local:
-	rm -f ./src/*.hip_o
+	rm -f ./src/*.hip_o ./src/*.cu ./src/*.cu_o
 
-.hip.hip_o:
-	$(HIPCC) -o $@ -c $< $(HIPCCFLAGS)
+.hip.cu:
+	$(HIPCC) --cuda -o $@ $<
 
-./src/HIPAligner.hip_o: ./src/HIPAligner.hpp
+.cu.cu_o:
+	$(NVCC) -o $@ -c $< $(HIPCCFLAGS)
+
+./src/HIPAligner.cu_o: ./src/HIPAligner.hpp
 
 dist-clone-link:
 	@if test -L $(LIBMASA_PATH); then \

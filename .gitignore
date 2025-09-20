@@ -68,11 +68,15 @@ hipalign
 /install-sh
 /libtool
 /ltmain.sh
+/admin
 /m4/
 /missing
 /stamp-h?
 .deps/
 .dirstamp
+src/config.h
+src/config.h.in
+src/stamp-h?
 .libs/
 *.l[ao]
 *~
