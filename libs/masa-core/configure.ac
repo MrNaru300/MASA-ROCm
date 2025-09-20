@@ -1,11 +1,11 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 #
-AC_PREREQ([2.63])
-AC_INIT([masa-core], [1.4.2.1028], [edans.sandes@gmail.com], [masa-core], [https://github.com/edanssandes/masa-core])
+AC_PREREQ([2.71])
+AC_INIT([masa-core],[1.4.2.1028],[edans.sandes@gmail.com],[masa-core],[https://github.com/edanssandes/masa-core])
 AC_CONFIG_AUX_DIR(admin)
 AM_INIT_AUTOMAKE
-m4_include([m4/ax_check_compile_flag.m4])
+AX_CHECK_COMPILE_FLAG
 AC_CONFIG_HEADERS([src/config.h])
 AC_CONFIG_FILES([Makefile])
 
@@ -48,7 +48,7 @@ OPTIMIZATION="-O3"
 
 
 AC_ARG_ENABLE([debug],
-	AC_HELP_STRING([--enable-debug],[enable cpu debug]),
+	AS_HELP_STRING([--enable-debug],[enable cpu debug]),
 	[DEBUG="-ggdb"; OPTIMIZATION=""]
 )
 
@@ -56,7 +56,7 @@ AC_ARG_ENABLE([debug],
 
 #default: 64bit
 AC_ARG_ENABLE([32bit],
-	AC_HELP_STRING([--enable-32bit],[force compilation in 32 bit mode.]),
+	AS_HELP_STRING([--enable-32bit],[force compilation in 32 bit mode.]),
 	[ARCH="386"; PLATFORM="-m32";
 		AC_MSG_NOTICE([Enabling 32bit compilation])
 	],
