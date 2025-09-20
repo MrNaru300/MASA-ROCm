@@ -44,7 +44,12 @@ clean-local:
 .cu.cu_o:
 	$(NVCC) -o $@ -c $< $(HIPCCFLAGS)
 
+.hip.hip_o:
+	$(HIPCC) -o $@ -c $< $(HIPCCFLAGS)
+
 ./src/HIPAligner.cu_o: ./src/HIPAligner.hpp
+
+./src/HIPAligner.hip_o: ./src/HIPAligner.hpp
 
 dist-clone-link:
 	@if test -L $(LIBMASA_PATH); then \
