@@ -5,7 +5,7 @@ AC_PREREQ([2.71])
 AC_INIT([masa-core],[1.4.2.1028],[edans.sandes@gmail.com],[masa-core],[https://github.com/edanssandes/masa-core])
 AC_CONFIG_AUX_DIR(admin)
 AM_INIT_AUTOMAKE
-AX_CHECK_COMPILE_FLAG
+AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_HEADERS([src/config.h])
 AC_CONFIG_FILES([Makefile])
 
