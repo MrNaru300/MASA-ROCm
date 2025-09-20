@@ -57,6 +57,13 @@ if test -z "$HIP_PLATFORM"; then
 	HIP_PLATFORM="amd"
 fi
 
+# Arquitetura HIP
+AC_ARG_WITH([hip-arch],
+	AS_HELP_STRING([--with-hip-arch=ARCH],[select one HIP architecture, e.g. gfx900, sm_80]),
+	[HIP_ARCH="$withval"],
+	[AS_IF([test "x$HIP_PLATFORM" = "xnvidia"], [HIP_ARCH="sm_80"], [HIP_ARCH="gfx900"])]
+)
+
 case "$HIP_PLATFORM" in
 	nvidia)
 		AC_MSG_NOTICE([Building for NVIDIA platform])
@@ -79,13 +86,6 @@ esac
 # Conditional para Makefile.am baseado na plataforma HIP
 AM_CONDITIONAL([HIP_PLATFORM_NVIDIA], [test "x$HIP_PLATFORM" = "xnvidia"])
 AM_CONDITIONAL([HIP_PLATFORM_AMD], [test "x$HIP_PLATFORM" = "xamd"])
-
-# Arquitetura HIP
-AC_ARG_WITH([hip-arch],
-	AS_HELP_STRING([--with-hip-arch=ARCH],[select one HIP architecture, e.g. gfx900, sm_80]),
-	[HIP_ARCH="$withval"],
-	[AS_IF([test "x$HIP_PLATFORM" = "xnvidia"], [HIP_ARCH="sm_80"], [HIP_ARCH="gfx900"])]
-)
 
 
 # Threads e registradores
