@@ -6,6 +6,8 @@ hipalign
 /*.iml
 /.vscode/
 
+libs/masa-core
+
 # Prerequisites
 *.d
 
