@@ -1,2 +1,11 @@
-Edans Sandes
-Bruno Santiago de Oliveira
+# Autores do MASA-ROCm
+
+Este projeto é baseado em MASA-CUDAlign.
+
+MASA-CUDAlign:
+
+- Edans Sandes (Autor Original)
+
+MASA-ROCm (Modificações e Portabilidade para ROCm):
+
+- Bruno Santiago de Oliveira (Autor das modificações, 2025)
