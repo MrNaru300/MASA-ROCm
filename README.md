@@ -37,8 +37,9 @@ feature or extension.
 
 ## Copyright
 
-**Copyright (c) 2010-2015 Edans Sandes**
-**Copyright (c) 2025 Bruno Santiago de Oliveira (Modifications for ROCm)**
+Copyright (c) 2010-2015 Edans Sandes
+
+Copyright (c) 2025 Bruno Santiago de Oliveira (Modifications for ROCm)
 
 This file and all the files in the sub directories are part of **MASA-ROCm**,
 which is based on the original MASA-CUDAlign project.
